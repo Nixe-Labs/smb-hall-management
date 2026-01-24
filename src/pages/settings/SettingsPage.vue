@@ -13,19 +13,19 @@ const settingsItems = [
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <h1 class="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Settings</h1>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
       <div
         v-for="item in settingsItems"
         :key="item.route"
-        class="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-md transition-shadow"
+        class="bg-white rounded-lg shadow p-4 md:p-6 cursor-pointer hover:shadow-md transition-shadow"
         @click="router.push({ name: item.route })"
       >
-        <div class="flex items-start gap-4">
-          <i :class="item.icon" class="text-2xl text-blue-600 mt-1"></i>
+        <div class="flex items-start gap-3 md:gap-4">
+          <i :class="item.icon" class="text-xl md:text-2xl text-blue-600 mt-1"></i>
           <div>
-            <h3 class="text-lg font-semibold text-gray-800">{{ item.label }}</h3>
-            <p class="text-sm text-gray-500 mt-1">{{ item.description }}</p>
+            <h3 class="text-base md:text-lg font-semibold text-gray-800">{{ item.label }}</h3>
+            <p class="text-xs md:text-sm text-gray-500 mt-1">{{ item.description }}</p>
           </div>
         </div>
       </div>

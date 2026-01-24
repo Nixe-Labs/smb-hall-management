@@ -124,9 +124,9 @@ onMounted(fetchAll)
 
 <template>
   <div>
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.back()" />
-      <h1 class="text-2xl font-bold text-gray-900">Booking Details</h1>
+      <h1 class="text-xl md:text-2xl font-bold text-gray-900">Booking Details</h1>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center h-64">
@@ -135,15 +135,15 @@ onMounted(fetchAll)
 
     <div v-else-if="booking">
       <!-- Booking Info Card -->
-      <div class="bg-white rounded-lg shadow p-6 mb-6">
-        <div class="flex items-start justify-between">
+      <div class="bg-white rounded-lg shadow p-4 md:p-6 mb-4 md:mb-6">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <h2 class="text-xl font-semibold text-gray-800">{{ booking.customer_name }}</h2>
+            <h2 class="text-lg md:text-xl font-semibold text-gray-800">{{ booking.customer_name }}</h2>
             <p class="text-gray-500 mt-1">{{ formatDate(booking.function_date) }}</p>
             <p v-if="booking.customer_phone" class="text-gray-500 text-sm">{{ booking.customer_phone }}</p>
             <p class="text-lg font-semibold text-gray-700 mt-2">Rent: {{ formatCurrency(booking.rent) }}</p>
           </div>
-          <div class="flex items-center gap-3">
+          <div class="flex flex-wrap items-center gap-2 md:gap-3">
             <Tag :value="booking.status" :severity="getStatusSeverity(booking.status)" class="capitalize text-sm" />
             <Select
               v-if="canEdit"
@@ -152,7 +152,7 @@ onMounted(fetchAll)
               option-label="label"
               option-value="value"
               placeholder="Change Status"
-              class="w-40"
+              class="w-36 md:w-40"
               @change="(e: { value: string }) => updateStatus(e.value)"
             />
             <Button

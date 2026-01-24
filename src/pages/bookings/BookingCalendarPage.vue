@@ -59,18 +59,19 @@ onMounted(fetchBookedDates)
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Calendar</h1>
+    <div class="flex items-center justify-between mb-4 md:mb-6">
+      <h1 class="text-xl md:text-2xl font-bold text-gray-900">Calendar</h1>
       <Button
         v-if="canEdit"
         label="New Booking"
         icon="pi pi-plus"
+        size="small"
         @click="router.push({ name: 'booking-create' })"
       />
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+      <div class="lg:col-span-2 bg-white rounded-lg shadow p-3 md:p-6">
         <DatePicker
           v-model="selectedDate"
           inline
@@ -89,8 +90,8 @@ onMounted(fetchBookedDates)
         </DatePicker>
       </div>
 
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+      <div class="bg-white rounded-lg shadow p-4 md:p-6">
+        <h3 class="text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4">
           {{ selectedDate ? selectedDate.toLocaleDateString('en-IN', { dateStyle: 'medium' }) : 'Select a date' }}
         </h3>
         <div v-if="bookingsOnDate.length > 0" class="flex flex-col gap-3">

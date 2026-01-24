@@ -68,38 +68,42 @@ onMounted(fetchBookings)
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Bookings</h1>
+    <div class="flex items-center justify-between mb-4 md:mb-6">
+      <h1 class="text-xl md:text-2xl font-bold text-gray-900">Bookings</h1>
       <Button
         v-if="canEdit"
         label="New Booking"
         icon="pi pi-plus"
+        size="small"
         @click="router.push({ name: 'booking-create' })"
       />
     </div>
 
     <!-- Filters -->
-    <div class="flex gap-4 mb-4">
+    <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
       <InputText
         v-model="searchQuery"
-        placeholder="Search by customer name..."
-        class="w-64"
+        placeholder="Search by customer..."
+        class="w-full sm:w-64"
         @keyup.enter="fetchBookings"
       />
-      <Select
-        v-model="statusFilter"
-        :options="statusOptions"
-        option-label="label"
-        option-value="value"
-        placeholder="Status"
-        class="w-40"
-        @change="fetchBookings"
-      />
-      <Button label="Search" icon="pi pi-search" severity="secondary" @click="fetchBookings" />
+      <div class="flex gap-2">
+        <Select
+          v-model="statusFilter"
+          :options="statusOptions"
+          option-label="label"
+          option-value="value"
+          placeholder="Status"
+          class="w-full sm:w-40"
+          @change="fetchBookings"
+        />
+        <Button icon="pi pi-search" severity="secondary" @click="fetchBookings" class="sm:hidden" />
+        <Button label="Search" icon="pi pi-search" severity="secondary" @click="fetchBookings" class="hidden sm:flex" />
+      </div>
     </div>
 
     <!-- Table -->
-    <div class="bg-white rounded-lg shadow">
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
       <DataTable
         :value="bookings"
         :loading="loading"

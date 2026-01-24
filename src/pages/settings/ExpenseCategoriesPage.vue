@@ -83,13 +83,14 @@ onMounted(fetchCategories)
 
 <template>
   <div>
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.push({ name: 'settings' })" />
-      <h1 class="text-2xl font-bold text-gray-900">Expense Categories</h1>
-      <Button label="Add Category" icon="pi pi-plus" size="small" class="ml-auto" @click="openAdd" />
+      <h1 class="text-lg md:text-2xl font-bold text-gray-900">Expense Categories</h1>
+      <Button icon="pi pi-plus" size="small" class="ml-auto sm:hidden" @click="openAdd" />
+      <Button label="Add Category" icon="pi pi-plus" size="small" class="ml-auto hidden sm:flex" @click="openAdd" />
     </div>
 
-    <div class="bg-white rounded-lg shadow">
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
       <DataTable :value="categories" :loading="loading" striped-rows class="p-datatable-sm">
         <Column field="name" header="Name" sortable />
         <Column field="sort_order" header="Order" sortable class="w-20" />

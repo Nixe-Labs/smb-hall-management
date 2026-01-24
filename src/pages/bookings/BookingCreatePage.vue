@@ -73,12 +73,12 @@ async function handleSubmit() {
 
 <template>
   <div class="max-w-2xl">
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.back()" />
-      <h1 class="text-2xl font-bold text-gray-900">New Booking</h1>
+      <h1 class="text-xl md:text-2xl font-bold text-gray-900">New Booking</h1>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-6">
+    <div class="bg-white rounded-lg shadow p-4 md:p-6">
       <form @submit.prevent="handleSubmit" class="flex flex-col gap-5">
         <div class="flex flex-col gap-2">
           <label class="text-sm font-medium text-gray-700">Function Date *</label>

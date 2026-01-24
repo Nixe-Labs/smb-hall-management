@@ -58,12 +58,12 @@ onMounted(fetchUsers)
 
 <template>
   <div>
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.push({ name: 'settings' })" />
-      <h1 class="text-2xl font-bold text-gray-900">User Management</h1>
+      <h1 class="text-lg md:text-2xl font-bold text-gray-900">User Management</h1>
     </div>
 
-    <div class="bg-white rounded-lg shadow">
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
       <DataTable :value="users" :loading="loading" striped-rows class="p-datatable-sm">
         <Column field="email" header="Email" sortable />
         <Column field="full_name" header="Name" />

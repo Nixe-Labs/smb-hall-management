@@ -103,11 +103,11 @@ onMounted(fetchReport)
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Reports</h1>
+    <h1 class="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Reports</h1>
 
     <!-- Filters -->
-    <div class="flex gap-4 mb-6 items-end">
-      <div class="flex flex-col gap-2">
+    <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 md:mb-6 sm:items-end">
+      <div class="flex flex-col gap-2 w-full sm:w-auto">
         <label class="text-sm font-medium text-gray-700">Date Range</label>
         <DatePicker
           v-model="dateRange"
@@ -115,11 +115,13 @@ onMounted(fetchReport)
           date-format="dd/mm/yy"
           show-icon
           placeholder="Select date range"
-          class="w-72"
+          class="w-full sm:w-72"
         />
       </div>
-      <Button label="Generate" icon="pi pi-search" @click="fetchReport" :loading="loading" />
-      <Button label="Export CSV" icon="pi pi-download" severity="secondary" @click="exportCSV" :disabled="bookingsWithTotals.length === 0" />
+      <div class="flex gap-2">
+        <Button label="Generate" icon="pi pi-search" @click="fetchReport" :loading="loading" size="small" />
+        <Button label="Export CSV" icon="pi pi-download" severity="secondary" @click="exportCSV" :disabled="bookingsWithTotals.length === 0" size="small" />
+      </div>
     </div>
 
     <!-- Summary Cards -->
@@ -141,7 +143,7 @@ onMounted(fetchReport)
     </div>
 
     <!-- Report Table -->
-    <div class="bg-white rounded-lg shadow">
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
       <DataTable :value="bookingsWithTotals" :loading="loading" striped-rows paginator :rows="20" class="p-datatable-sm">
         <Column header="Date" sortable field="function_date">
           <template #body="{ data }">{{ formatDate(data.function_date) }}</template>
