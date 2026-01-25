@@ -57,13 +57,13 @@ onMounted(fetchUsers)
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
+  <div class="text-[#1F2937]">
+    <div class="flex items-center gap-3 mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.push({ name: 'settings' })" />
-      <h1 class="text-lg md:text-2xl font-bold text-gray-900">User Management</h1>
+      <h1 class="text-3xl font-bold text-[#1F2937]">User Management</h1>
     </div>
 
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <div class="card overflow-hidden">
       <DataTable :value="users" :loading="loading" striped-rows class="p-datatable-sm">
         <Column field="email" header="Email" sortable />
         <Column field="full_name" header="Name" />
@@ -86,7 +86,7 @@ onMounted(fetchUsers)
         </Column>
         <Column header="Active" class="w-20">
           <template #body="{ data }">
-            <i :class="data.is_active ? 'pi pi-check text-green-500' : 'pi pi-times text-red-500'"></i>
+            <i :class="data.is_active ? 'pi pi-check text-[#10B981]' : 'pi pi-times text-red-500'"></i>
           </template>
         </Column>
       </DataTable>

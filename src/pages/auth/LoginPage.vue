@@ -35,11 +35,17 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-md p-8">
-    <h2 class="text-xl font-semibold text-gray-800 mb-6">Sign In</h2>
-    <form @submit.prevent="handleLogin" class="flex flex-col gap-4">
+  <div class="card p-8 w-full">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 rounded-xl bg-[#10B981] flex items-center justify-center mx-auto mb-4">
+        <span class="font-bold text-white text-2xl">S</span>
+      </div>
+      <h2 class="text-2xl font-bold text-[#1F2937] mb-2">Sign In</h2>
+      <p class="text-[#6B7280] text-sm">Welcome back! Please sign in to continue.</p>
+    </div>
+    <form @submit.prevent="handleLogin" class="flex flex-col gap-5">
       <div class="flex flex-col gap-2">
-        <label for="email" class="text-sm font-medium text-gray-700">Email</label>
+        <label for="email" class="text-sm font-medium text-[#1F2937]">Email</label>
         <InputText
           id="email"
           v-model="email"
@@ -49,7 +55,7 @@ async function handleLogin() {
         />
       </div>
       <div class="flex flex-col gap-2">
-        <label for="password" class="text-sm font-medium text-gray-700">Password</label>
+        <label for="password" class="text-sm font-medium text-[#1F2937]">Password</label>
         <Password
           id="password"
           v-model="password"

@@ -11,12 +11,14 @@ import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
+import DeleteConfirmDialog from '@/components/common/DeleteConfirmDialog.vue'
 
 const props = defineProps<{
   bookingId: string
   expenses: Expense[]
   categories: ExpenseCategory[]
   canEdit: boolean
+  canDelete?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +29,9 @@ const toast = useToast()
 const showDialog = ref(false)
 const editingItem = ref<Partial<Expense>>({})
 const saving = ref(false)
+const showDeleteDialog = ref(false)
+const itemToDelete = ref<Expense | null>(null)
+const deleting = ref(false)
 
 function getCategoryName(categoryId: string): string {
   return props.categories.find(c => c.id === categoryId)?.name ?? 'Unknown'
@@ -75,12 +80,25 @@ async function save() {
   }
 }
 
-async function remove(item: Expense) {
-  const { error } = await supabase.from('expenses').delete().eq('id', item.id)
-  if (error) {
-    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
-  } else {
+function openDeleteDialog(item: Expense) {
+  itemToDelete.value = item
+  showDeleteDialog.value = true
+}
+
+async function confirmDelete() {
+  if (!itemToDelete.value) return
+
+  deleting.value = true
+  try {
+    const { error } = await supabase.from('expenses').delete().eq('id', itemToDelete.value.id)
+    if (error) throw error
     emit('updated')
+  } catch (error: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
+  } finally {
+    deleting.value = false
+    showDeleteDialog.value = false
+    itemToDelete.value = null
   }
 }
 </script>
@@ -88,7 +106,7 @@ async function remove(item: Expense) {
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
-      <h4 class="font-medium text-gray-700">Expenses</h4>
+      <h4 class="font-medium text-[#6B7280]">Expenses</h4>
       <Button v-if="canEdit" label="Add Expense" icon="pi pi-plus" size="small" @click="openAdd" />
     </div>
 
@@ -100,16 +118,16 @@ async function remove(item: Expense) {
       <Column header="Amount" class="text-right">
         <template #body="{ data }">{{ formatCurrency(data.amount) }}</template>
       </Column>
-      <Column v-if="canEdit" header="Actions" class="w-24">
+      <Column v-if="canEdit || canDelete" header="Actions" class="w-24">
         <template #body="{ data }">
           <div class="flex gap-1">
-            <Button icon="pi pi-pencil" text rounded size="small" @click="openEdit(data)" />
-            <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="remove(data)" />
+            <Button v-if="canEdit" icon="pi pi-pencil" text rounded size="small" @click="openEdit(data)" />
+            <Button v-if="canDelete" icon="pi pi-trash" text rounded size="small" severity="danger" @click="openDeleteDialog(data)" />
           </div>
         </template>
       </Column>
       <template #empty>
-        <div class="text-center py-4 text-gray-400">No expenses recorded</div>
+        <div class="text-center py-4 text-[#9CA3AF]">No expenses recorded</div>
       </template>
       <template #footer>
         <div class="text-right font-bold">
@@ -121,15 +139,15 @@ async function remove(item: Expense) {
     <Dialog v-model:visible="showDialog" header="Expense" modal class="w-full max-w-sm">
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Category *</label>
+          <label class="text-sm font-medium text-[#6B7280]">Category *</label>
           <Select v-model="editingItem.category_id" :options="categories" option-label="name" option-value="id" placeholder="Select category" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Amount *</label>
+          <label class="text-sm font-medium text-[#6B7280]">Amount *</label>
           <InputNumber v-model="editingItem.amount" mode="currency" currency="INR" locale="en-IN" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Description</label>
+          <label class="text-sm font-medium text-[#6B7280]">Description</label>
           <InputText v-model="editingItem.description" placeholder="Optional description" class="w-full" />
         </div>
       </div>
@@ -138,5 +156,12 @@ async function remove(item: Expense) {
         <Button label="Save" icon="pi pi-check" :loading="saving" @click="save" />
       </template>
     </Dialog>
+
+    <DeleteConfirmDialog
+      v-model:visible="showDeleteDialog"
+      :item-name="itemToDelete ? getCategoryName(itemToDelete.category_id) : ''"
+      :loading="deleting"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

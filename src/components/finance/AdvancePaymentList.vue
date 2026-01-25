@@ -125,26 +125,26 @@ async function remove(adv: AdvancePayment) {
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
-      <h4 class="font-medium text-gray-700">Advance Payments</h4>
+      <h4 class="font-medium text-[#6B7280]">Advance Payments</h4>
       <Button v-if="canEdit && advances.length < 3" label="Add Advance" icon="pi pi-plus" size="small" @click="openAdd" />
     </div>
 
-    <div v-if="advances.length === 0" class="text-center py-8 text-gray-400">
+    <div v-if="advances.length === 0" class="text-center py-8 text-[#9CA3AF]">
       No advance payments recorded
     </div>
 
     <div v-else class="flex flex-col gap-3">
-      <div v-for="adv in advances" :key="adv.id" class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+      <div v-for="adv in advances" :key="adv.id" class="flex items-center justify-between p-4 bg-white rounded-xl border border-[#E5E7EB] shadow-sm hover:shadow-md hover:border-[#D1D5DB] transition-all">
         <div>
-          <div class="font-medium text-gray-800">Advance #{{ adv.advance_number }}</div>
-          <div class="text-sm text-gray-500">
+          <div class="font-medium text-[#1F2937]">Advance #{{ adv.advance_number }}</div>
+          <div class="text-sm text-[#6B7280]">
             {{ formatCurrency(adv.amount) }}
-            <span v-if="adv.payment_method" class="capitalize"> - {{ adv.payment_method }}</span>
+            <span v-if="adv.payment_method" class="capitalize"> • {{ adv.payment_method }}</span>
           </div>
-          <div v-if="adv.payment_date" class="text-xs text-gray-400">Paid: {{ formatDate(adv.payment_date) }}</div>
+          <div v-if="adv.payment_date" class="text-xs text-[#9CA3AF] mt-1">Paid: {{ formatDate(adv.payment_date) }}</div>
         </div>
         <div v-if="canEdit" class="flex gap-2">
-          <Button icon="pi pi-pencil" text rounded size="small" @click="openEdit(adv)" />
+          <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" @click="openEdit(adv)" />
           <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="remove(adv)" />
         </div>
       </div>
@@ -154,23 +154,23 @@ async function remove(adv: AdvancePayment) {
     <Dialog v-model:visible="showDialog" header="Advance Payment" modal class="w-full max-w-md">
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Amount *</label>
+          <label class="text-sm font-medium text-[#6B7280]">Amount *</label>
           <InputNumber v-model="editingAdvance.amount" mode="currency" currency="INR" locale="en-IN" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Payment Method</label>
+          <label class="text-sm font-medium text-[#6B7280]">Payment Method</label>
           <Select v-model="editingAdvance.payment_method" :options="paymentMethods" option-label="label" option-value="value" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Payment Date</label>
+          <label class="text-sm font-medium text-[#6B7280]">Payment Date</label>
           <DatePicker v-model="editingAdvance.payment_date" date-format="dd/mm/yy" show-icon class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Deposit Account</label>
+          <label class="text-sm font-medium text-[#6B7280]">Deposit Account</label>
           <Select v-model="editingAdvance.deposit_account_id" :options="bankAccounts" option-label="name" option-value="id" placeholder="Select account" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Deposit Date</label>
+          <label class="text-sm font-medium text-[#6B7280]">Deposit Date</label>
           <DatePicker v-model="editingAdvance.deposit_date" date-format="dd/mm/yy" show-icon class="w-full" />
         </div>
       </div>

@@ -79,15 +79,16 @@ onMounted(fetchAccounts)
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
-      <Button icon="pi pi-arrow-left" text rounded @click="router.push({ name: 'settings' })" />
-      <h1 class="text-lg md:text-2xl font-bold text-gray-900">Bank Accounts</h1>
-      <Button icon="pi pi-plus" size="small" class="ml-auto sm:hidden" @click="openAdd" />
-      <Button label="Add Account" icon="pi pi-plus" size="small" class="ml-auto hidden sm:flex" @click="openAdd" />
+  <div class="text-[#1F2937]">
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <Button icon="pi pi-arrow-left" text rounded @click="router.push({ name: 'settings' })" />
+        <h1 class="text-3xl font-bold text-[#1F2937]">Bank Accounts</h1>
+      </div>
+      <Button label="Add Account" icon="pi pi-plus" @click="openAdd" />
     </div>
 
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <div class="card overflow-hidden">
       <DataTable :value="accounts" :loading="loading" striped-rows class="p-datatable-sm">
         <Column field="name" header="Name" sortable />
         <Column field="bank_name" header="Bank" />
@@ -108,20 +109,20 @@ onMounted(fetchAccounts)
     <Dialog v-model:visible="showDialog" header="Bank Account" modal class="w-full max-w-sm">
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Name *</label>
+          <label class="text-sm font-medium text-[#1F2937]">Name *</label>
           <InputText v-model="editingItem.name" placeholder="Account name (e.g., SMB AC)" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Bank Name</label>
+          <label class="text-sm font-medium text-[#1F2937]">Bank Name</label>
           <InputText v-model="editingItem.bank_name" placeholder="Bank name" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Account Number</label>
+          <label class="text-sm font-medium text-[#1F2937]">Account Number</label>
           <InputText v-model="editingItem.account_number" placeholder="Account number" class="w-full" />
         </div>
         <div class="flex items-center gap-2">
           <ToggleSwitch v-model="editingItem.is_active" />
-          <label class="text-sm text-gray-700">Active</label>
+          <label class="text-sm text-[#1F2937]">Active</label>
         </div>
       </div>
       <template #footer>

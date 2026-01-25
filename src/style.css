@@ -1,11 +1,281 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "primeicons/primeicons.css";
+
+@theme {
+  --font-sans: 'Outfit', sans-serif;
+  --color-primary-green: #10B981;
+  --color-primary-green-dark: #059669;
+  --color-primary-green-light: #34D399;
+  --color-bg-white: #FFFFFF;
+  --color-bg-off-white: #F9FAFB;
+  --color-bg-sidebar: #F5F7FA;
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #6B7280;
+  --color-text-muted: #9CA3AF;
+  --color-border-light: #E5E7EB;
+  --color-border-lighter: #F3F4F6;
+  --color-hover-green: #F0FDF4;
+}
+
+:root {
+  --primary-color: var(--color-primary-green);
+  --p-primary-color: var(--color-primary-green);
+  --p-primary-500: var(--color-primary-green);
+}
 
 body {
   margin: 0;
   min-height: 100vh;
+  background-color: var(--color-bg-off-white);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  line-height: 1.5;
 }
 
 #app {
   min-height: 100vh;
+}
+
+/* Glass Pill Utility */
+.glass-pill {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+  border-radius: 9999px;
+}
+
+/* Card Utilities */
+.card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02), 0 10px 15px rgba(0, 0, 0, 0.03);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05), 0 20px 48px rgba(0, 0, 0, 0.05);
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+/* Static card without hover lift - for content containers */
+.card-static {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02), 0 10px 15px rgba(0, 0, 0, 0.03);
+}
+
+/* Button Utilities */
+.btn-primary {
+  background-color: var(--color-primary-green);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-green-dark);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+/* Text Utilities */
+.text-muted {
+  color: var(--color-text-muted);
+}
+
+/* Animations */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Stagger delays */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-off-white);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* PrimeVue Overrides for Light Theme */
+.p-component {
+  font-family: var(--font-sans) !important;
+}
+
+/* Inputs */
+.p-inputtext {
+  background: var(--color-bg-white) !important;
+  border: 1px solid var(--color-border-light) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 6px !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.p-inputtext:enabled:hover {
+  border-color: var(--color-text-muted) !important;
+}
+
+.p-inputtext:enabled:focus {
+  border-color: var(--color-primary-green) !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+}
+
+/* Buttons */
+.p-button {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.p-button.p-button-primary {
+  background: var(--color-primary-green) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.p-button.p-button-primary:hover {
+  background: var(--color-primary-green-dark) !important;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2) !important;
+}
+
+.p-button.p-button-secondary {
+  background: var(--color-bg-white) !important;
+  border: 1px solid var(--color-border-light) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.p-button.p-button-secondary:hover {
+  background: var(--color-bg-off-white) !important;
+  border-color: var(--color-text-muted) !important;
+}
+
+.p-button.p-button-text {
+  color: var(--color-text-secondary) !important;
+}
+
+.p-button.p-button-text:hover {
+  background: var(--color-bg-off-white) !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* TabView Overrides for PrimeVue 4 */
+.p-tabview {
+  background: transparent !important;
+}
+
+.p-tabview-tablist {
+  background: white !important;
+  border: none !important;
+  border-bottom: 1px solid var(--color-border-light) !important;
+  gap: 0.5rem !important;
+  padding: 0 1rem !important;
+  border-radius: 16px 16px 0 0 !important;
+}
+
+.p-tabview-tab-list {
+  background: transparent !important;
+}
+
+.p-tabview-nav-container {
+  background: transparent !important;
+}
+
+.p-tab {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  color: var(--color-text-secondary) !important;
+  font-weight: 500 !important;
+  padding: 0.875rem 1rem !important;
+  margin-bottom: -1px !important;
+  transition: all 0.2s !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.p-tab:hover {
+  color: var(--color-text-primary) !important;
+  background: var(--color-bg-off-white) !important;
+}
+
+.p-tab[data-p-active="true"],
+.p-tab.p-tab-active {
+  color: var(--color-primary-green) !important;
+  border-bottom-color: var(--color-primary-green) !important;
+  background: transparent !important;
+  font-weight: 600 !important;
+}
+
+.p-tabview-panels,
+.p-tabpanels {
+  background: transparent !important;
+  padding: 1.5rem !important;
+}
+
+.p-tabpanel {
+  padding: 0 !important;
+}
+
+/* Icon button with subtle background */
+.p-button.p-button-text.p-button-rounded {
+  background: var(--color-bg-off-white) !important;
+}
+
+.p-button.p-button-text.p-button-rounded:hover {
+  background: var(--color-border-light) !important;
+}
+
+.p-button.p-button-text.p-button-rounded.p-button-danger {
+  background: #FEF2F2 !important;
+}
+
+.p-button.p-button-text.p-button-rounded.p-button-danger:hover {
+  background: #FEE2E2 !important;
+}
+
+/* Force show filters on desktop */
+@media (min-width: 640px) {
+  .sm\:\!block {
+    display: block !important;
+  }
 }

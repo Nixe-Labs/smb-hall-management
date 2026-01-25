@@ -1,39 +1,45 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import AppSidebar from './components/AppSidebar.vue'
-import AppHeader from './components/AppHeader.vue'
-
-const sidebarCollapsed = ref(false)
-const mobileOpen = ref(false)
-
-function toggleSidebar() {
-  // On mobile: toggle the overlay drawer
-  if (window.innerWidth < 768) {
-    mobileOpen.value = !mobileOpen.value
-  } else {
-    sidebarCollapsed.value = !sidebarCollapsed.value
-  }
-}
-
-function closeMobileSidebar() {
-  mobileOpen.value = false
-}
+import FloatingNavBar from './components/FloatingNavBar.vue'
 </script>
 
 <template>
-  <div class="min-h-screen flex bg-gray-50">
-    <AppSidebar :collapsed="sidebarCollapsed" :mobile-open="mobileOpen" @close-mobile="closeMobileSidebar" />
-    <div
-      class="flex-1 flex flex-col transition-all duration-300"
-      :class="[
-        sidebarCollapsed ? 'md:ml-16' : 'md:ml-64',
-        'ml-0'
-      ]"
-    >
-      <AppHeader @toggle-sidebar="toggleSidebar" />
-      <main class="flex-1 p-4 md:p-6">
-        <router-view />
-      </main>
-    </div>
+  <div class="min-h-screen bg-[#F9FAFB] relative font-sans">
+    
+    <!-- Top Mask: Hides content scrolling above the navbar -->
+    <div class="fixed top-0 left-0 right-0 h-6 bg-[#F9FAFB] z-40"></div>
+
+    <!-- Floating Navigation Bar -->
+    <FloatingNavBar />
+    
+    <!-- Main Content Area -->
+    <main class="container mx-auto px-4 pb-12 pt-32 transition-all duration-300 ease-out max-w-6xl">
+      <router-view v-slot="{ Component }">
+        <transition name="fade-slide" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
+    </main>
+
+    <!-- Bottom Blur: Fades content at the bottom -->
+    <div class="fixed bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#F9FAFB] to-transparent pointer-events-none z-40"></div>
+    
   </div>
 </template>
+
+<style>
+/* Page Transitions - Subtle and smooth */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+</style>

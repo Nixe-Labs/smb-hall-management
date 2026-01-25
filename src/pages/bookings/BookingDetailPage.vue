@@ -12,19 +12,23 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import TabView from 'primevue/tabview'
 import TabPanel from 'primevue/tabpanel'
-import Select from 'primevue/select'
 import AdvancePaymentList from '@/components/finance/AdvancePaymentList.vue'
 import BillItemsTable from '@/components/finance/BillItemsTable.vue'
 import ExpensesTable from '@/components/finance/ExpensesTable.vue'
 import DepositsTable from '@/components/finance/DepositsTable.vue'
 import FinancialSummary from '@/components/finance/FinancialSummary.vue'
+import DeleteConfirmDialog from '@/components/common/DeleteConfirmDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const { canEdit } = usePermissions()
+const { canEdit, canDelete } = usePermissions()
 
 const bookingId = computed(() => route.params.id as string)
+const showDeleteDialog = ref(false)
+const showCancelDialog = ref(false)
+const deleting = ref(false)
+const cancelling = ref(false)
 const booking = ref<Booking | null>(null)
 const advances = ref<AdvancePayment[]>([])
 const billItems = ref<BillItem[]>([])
@@ -46,15 +50,34 @@ const summary = computed(() => {
   )
 })
 
-const statusOptions = [
-  { label: 'Upcoming', value: 'upcoming' },
-  { label: 'Completed', value: 'completed' },
-  { label: 'Cancelled', value: 'cancelled' },
-]
+// Auto-calculate status based on function date
+const computedStatus = computed(() => {
+  if (!booking.value) return null
+  if (booking.value.status === 'cancelled') return 'cancelled'
 
-function getStatusSeverity(status: string): "success" | "info" | "danger" | "secondary" | undefined {
+  const eventDate = new Date(booking.value.function_date + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (eventDate.getTime() < today.getTime()) return 'completed'
+  if (eventDate.getTime() === today.getTime()) return 'ongoing'
+  return 'upcoming'
+})
+
+const statusLabel = computed(() => {
+  switch (computedStatus.value) {
+    case 'ongoing': return 'Today'
+    case 'completed': return 'Completed'
+    case 'cancelled': return 'Cancelled'
+    case 'upcoming': return 'Upcoming'
+    default: return ''
+  }
+})
+
+function getStatusSeverity(status: string | null): "success" | "info" | "danger" | "secondary" | "warn" | undefined {
   switch (status) {
-    case 'completed': return 'success'
+    case 'completed': return 'secondary'
+    case 'ongoing': return 'success'
     case 'upcoming': return 'info'
     case 'cancelled': return 'danger'
     default: return 'secondary'
@@ -88,17 +111,23 @@ async function fetchAll() {
   }
 }
 
-async function updateStatus(newStatus: string) {
-  const { error } = await supabase
-    .from('bookings')
-    .update({ status: newStatus })
-    .eq('id', bookingId.value)
+async function cancelBooking() {
+  cancelling.value = true
+  try {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingId.value)
 
-  if (error) {
+    if (error) throw error
+
+    if (booking.value) booking.value.status = 'cancelled'
+    toast.add({ severity: 'success', summary: 'Cancelled', detail: 'Booking cancelled successfully', life: 3000 })
+  } catch (error: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
-  } else {
-    if (booking.value) booking.value.status = newStatus as Booking['status']
-    toast.add({ severity: 'success', summary: 'Updated', detail: 'Status updated', life: 3000 })
+  } finally {
+    cancelling.value = false
+    showCancelDialog.value = false
   }
 }
 
@@ -119,49 +148,89 @@ async function generateInvoice() {
   downloadInvoice(doc, `Invoice-${booking.value.customer_name}-${booking.value.function_date}.pdf`)
 }
 
+async function handleDeleteBooking() {
+  deleting.value = true
+  try {
+    // Delete related records first (cascade)
+    await Promise.all([
+      supabase.from('advance_payments').delete().eq('booking_id', bookingId.value),
+      supabase.from('bill_items').delete().eq('booking_id', bookingId.value),
+      supabase.from('expenses').delete().eq('booking_id', bookingId.value),
+      supabase.from('deposits').delete().eq('booking_id', bookingId.value),
+    ])
+
+    // Delete the booking
+    const { error } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId.value)
+
+    if (error) throw error
+
+    toast.add({ severity: 'success', summary: 'Deleted', detail: 'Booking deleted successfully', life: 3000 })
+    router.push({ name: 'bookings' })
+  } catch (error: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
+  } finally {
+    deleting.value = false
+    showDeleteDialog.value = false
+  }
+}
+
 onMounted(fetchAll)
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
+  <div class="text-[#1F2937]">
+    <div class="flex items-center gap-3 mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.back()" />
-      <h1 class="text-xl md:text-2xl font-bold text-gray-900">Booking Details</h1>
+      <h1 class="text-2xl md:text-3xl font-bold text-[#1F2937]">Booking Details</h1>
     </div>
 
-    <div v-if="loading" class="flex items-center justify-center h-64">
-      <i class="pi pi-spinner pi-spin text-4xl text-blue-500"></i>
+    <div v-if="loading" class="flex items-center justify-center h-96">
+      <div class="relative">
+        <div class="w-16 h-16 border-4 border-[#E5E7EB] border-t-[#10B981] rounded-full animate-spin"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold text-[#10B981]">SMB</div>
+      </div>
     </div>
 
     <div v-else-if="booking">
       <!-- Booking Info Card -->
-      <div class="bg-white rounded-lg shadow p-4 md:p-6 mb-4 md:mb-6">
+      <div class="card-static p-4 md:p-6 mb-6">
         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <h2 class="text-lg md:text-xl font-semibold text-gray-800">{{ booking.customer_name }}</h2>
-            <p class="text-gray-500 mt-1">{{ formatDate(booking.function_date) }}</p>
-            <p v-if="booking.customer_phone" class="text-gray-500 text-sm">{{ booking.customer_phone }}</p>
-            <p class="text-lg font-semibold text-gray-700 mt-2">Rent: {{ formatCurrency(booking.rent) }}</p>
+            <h2 class="text-xl font-semibold text-[#1F2937] mb-2">{{ booking.customer_name }}</h2>
+            <p class="text-[#6B7280]">{{ formatDate(booking.function_date) }}</p>
+            <p v-if="booking.customer_phone" class="text-[#6B7280] text-sm mt-1">{{ booking.customer_phone }}</p>
+            <p class="text-lg font-semibold text-[#1F2937] mt-3">Rent: {{ formatCurrency(booking.rent) }}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 md:gap-3">
-            <Tag :value="booking.status" :severity="getStatusSeverity(booking.status)" class="capitalize text-sm" />
-            <Select
-              v-if="canEdit"
-              :model-value="booking.status"
-              :options="statusOptions"
-              option-label="label"
-              option-value="value"
-              placeholder="Change Status"
-              class="w-36 md:w-40"
-              @change="(e: { value: string }) => updateStatus(e.value)"
-            />
-            <Button
-              label="Invoice"
-              icon="pi pi-file-pdf"
-              severity="secondary"
-              size="small"
-              @click="generateInvoice"
-            />
+            <Tag :value="statusLabel" :severity="getStatusSeverity(computedStatus)" />
+            <div class="flex items-center gap-2">
+              <Button
+                label="Invoice"
+                icon="pi pi-file-pdf"
+                severity="secondary"
+                size="small"
+                @click="generateInvoice"
+              />
+              <Button
+                v-if="canEdit && computedStatus !== 'cancelled'"
+                label="Cancel"
+                icon="pi pi-times"
+                severity="warn"
+                size="small"
+                @click="showCancelDialog = true"
+              />
+              <Button
+                v-if="canDelete"
+                label="Delete"
+                icon="pi pi-trash"
+                severity="danger"
+                size="small"
+                @click="showDeleteDialog = true"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -170,7 +239,7 @@ onMounted(fetchAll)
       <FinancialSummary v-if="summary" :summary="summary" class="mb-6" />
 
       <!-- Tabs -->
-      <div class="bg-white rounded-lg shadow">
+      <div class="card-static overflow-hidden">
         <TabView>
           <TabPanel value="advances" header="Advances">
             <AdvancePaymentList
@@ -187,6 +256,7 @@ onMounted(fetchAll)
               :bill-items="billItems"
               :categories="billCategories"
               :can-edit="canEdit"
+              :can-delete="canDelete"
               @updated="fetchAll"
             />
           </TabPanel>
@@ -196,6 +266,7 @@ onMounted(fetchAll)
               :expenses="expenses"
               :categories="expenseCategories"
               :can-edit="canEdit"
+              :can-delete="canDelete"
               @updated="fetchAll"
             />
           </TabPanel>
@@ -205,6 +276,7 @@ onMounted(fetchAll)
               :deposits="deposits"
               :bank-accounts="bankAccounts"
               :can-edit="canEdit"
+              :can-delete="canDelete"
               @updated="fetchAll"
             />
           </TabPanel>
@@ -212,8 +284,29 @@ onMounted(fetchAll)
       </div>
     </div>
 
-    <div v-else class="text-center py-16 text-gray-400">
+    <div v-else class="text-center py-16 text-[#9CA3AF]">
       Booking not found
     </div>
+
+    <!-- Cancel Confirmation Dialog -->
+    <DeleteConfirmDialog
+      v-model:visible="showCancelDialog"
+      :item-name="booking?.customer_name"
+      :loading="cancelling"
+      confirm-word="CANCEL"
+      title="Cancel Booking"
+      message="Are you sure you want to cancel this booking? The date will become available again."
+      button-label="Cancel Booking"
+      severity="warn"
+      @confirm="cancelBooking"
+    />
+
+    <!-- Delete Confirmation Dialog -->
+    <DeleteConfirmDialog
+      v-model:visible="showDeleteDialog"
+      :item-name="booking?.customer_name"
+      :loading="deleting"
+      @confirm="handleDeleteBooking"
+    />
   </div>
 </template>

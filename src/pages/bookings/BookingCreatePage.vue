@@ -73,15 +73,15 @@ async function handleSubmit() {
 
 <template>
   <div class="max-w-2xl">
-    <div class="flex items-center gap-2 md:gap-4 mb-4 md:mb-6">
+    <div class="flex items-center gap-3 mb-6">
       <Button icon="pi pi-arrow-left" text rounded @click="router.back()" />
-      <h1 class="text-xl md:text-2xl font-bold text-gray-900">New Booking</h1>
+      <h1 class="text-3xl font-bold text-[#1F2937]">New Booking</h1>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-4 md:p-6">
+    <div class="card p-6">
       <form @submit.prevent="handleSubmit" class="flex flex-col gap-5">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Function Date *</label>
+          <label class="text-sm font-medium text-[#1F2937]">Function Date *</label>
           <DatePicker
             v-model="form.function_date"
             date-format="dd/mm/yy"
@@ -91,22 +91,22 @@ async function handleSubmit() {
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Customer Name *</label>
+          <label class="text-sm font-medium text-[#1F2937]">Customer Name *</label>
           <InputText v-model="form.customer_name" placeholder="Enter customer name" class="w-full" />
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Phone</label>
+          <label class="text-sm font-medium text-[#1F2937]">Phone</label>
           <InputText v-model="form.customer_phone" placeholder="Enter phone number" class="w-full" />
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Address</label>
+          <label class="text-sm font-medium text-[#1F2937]">Address</label>
           <Textarea v-model="form.customer_address" placeholder="Enter address" rows="2" class="w-full" />
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Rent Amount *</label>
+          <label class="text-sm font-medium text-[#1F2937]">Rent Amount *</label>
           <InputNumber
             v-model="form.rent"
             mode="currency"
@@ -117,7 +117,7 @@ async function handleSubmit() {
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-gray-700">Notes</label>
+          <label class="text-sm font-medium text-[#1F2937]">Notes</label>
           <Textarea v-model="form.notes" placeholder="Any additional notes" rows="3" class="w-full" />
         </div>
 

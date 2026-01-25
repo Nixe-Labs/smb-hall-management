@@ -67,9 +67,34 @@ async function fetchReport() {
   }
 }
 
+// Compute status from function date
+function getComputedStatus(booking: Booking): 'completed' | 'ongoing' | 'upcoming' | 'cancelled' {
+  if (booking.status === 'cancelled') return 'cancelled'
+
+  const eventDate = new Date(booking.function_date + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (eventDate.getTime() < today.getTime()) return 'completed'
+  if (eventDate.getTime() === today.getTime()) return 'ongoing'
+  return 'upcoming'
+}
+
+function getStatusLabel(booking: Booking): string {
+  const status = getComputedStatus(booking)
+  switch (status) {
+    case 'ongoing': return 'Today'
+    case 'completed': return 'Completed'
+    case 'cancelled': return 'Cancelled'
+    case 'upcoming': return 'Upcoming'
+    default: return ''
+  }
+}
+
 function getStatusSeverity(status: string): "success" | "info" | "danger" | "secondary" | undefined {
   switch (status) {
-    case 'completed': return 'success'
+    case 'completed': return 'secondary'
+    case 'ongoing': return 'success'
     case 'upcoming': return 'info'
     case 'cancelled': return 'danger'
     default: return 'secondary'
@@ -85,7 +110,7 @@ function exportCSV() {
     b.total_bill,
     b.total_advance,
     b.total_expenses,
-    b.status,
+    getStatusLabel(b),
   ])
 
   const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
@@ -102,48 +127,50 @@ onMounted(fetchReport)
 </script>
 
 <template>
-  <div>
-    <h1 class="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Reports</h1>
+  <div class="text-[#1F2937]">
+    <h1 class="text-3xl font-bold text-[#1F2937] mb-6">Reports</h1>
 
     <!-- Filters -->
-    <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 md:mb-6 sm:items-end">
-      <div class="flex flex-col gap-2 w-full sm:w-auto">
-        <label class="text-sm font-medium text-gray-700">Date Range</label>
-        <DatePicker
-          v-model="dateRange"
-          selection-mode="range"
-          date-format="dd/mm/yy"
-          show-icon
-          placeholder="Select date range"
-          class="w-full sm:w-72"
-        />
-      </div>
-      <div class="flex gap-2">
-        <Button label="Generate" icon="pi pi-search" @click="fetchReport" :loading="loading" size="small" />
-        <Button label="Export CSV" icon="pi pi-download" severity="secondary" @click="exportCSV" :disabled="bookingsWithTotals.length === 0" size="small" />
+    <div class="card-static p-4 mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
+        <div class="flex flex-col gap-2 flex-1">
+          <label class="text-sm font-medium text-[#1F2937]">Date Range</label>
+          <DatePicker
+            v-model="dateRange"
+            selection-mode="range"
+            date-format="dd/mm/yy"
+            show-icon
+            placeholder="Select date range"
+            class="w-full sm:w-72"
+          />
+        </div>
+        <div class="flex gap-2">
+          <Button label="Generate" icon="pi pi-search" @click="fetchReport" :loading="loading" />
+          <Button label="Export CSV" icon="pi pi-download" severity="secondary" @click="exportCSV" :disabled="bookingsWithTotals.length === 0" />
+        </div>
       </div>
     </div>
 
     <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow p-4">
-        <div class="text-sm text-gray-500">Total Revenue</div>
-        <div class="text-xl font-bold text-green-600">{{ formatCurrency(totals.revenue) }}</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div class="card p-6">
+        <div class="text-[#6B7280] text-sm font-medium mb-1">Total Revenue</div>
+        <div class="text-2xl font-bold text-[#10B981]">{{ formatCurrency(totals.revenue) }}</div>
       </div>
-      <div class="bg-white rounded-lg shadow p-4">
-        <div class="text-sm text-gray-500">Total Expenses</div>
-        <div class="text-xl font-bold text-red-600">{{ formatCurrency(totals.expenses) }}</div>
+      <div class="card p-6">
+        <div class="text-[#6B7280] text-sm font-medium mb-1">Total Expenses</div>
+        <div class="text-2xl font-bold text-red-500">{{ formatCurrency(totals.expenses) }}</div>
       </div>
-      <div class="bg-white rounded-lg shadow p-4">
-        <div class="text-sm text-gray-500">Net Profit</div>
-        <div class="text-xl font-bold" :class="totals.revenue - totals.expenses >= 0 ? 'text-green-600' : 'text-red-600'">
+      <div class="card p-6">
+        <div class="text-[#6B7280] text-sm font-medium mb-1">Net Profit</div>
+        <div class="text-2xl font-bold" :class="totals.revenue - totals.expenses >= 0 ? 'text-[#10B981]' : 'text-red-500'">
           {{ formatCurrency(totals.revenue - totals.expenses) }}
         </div>
       </div>
     </div>
 
     <!-- Report Table -->
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <div class="card-static overflow-hidden">
       <DataTable :value="bookingsWithTotals" :loading="loading" striped-rows paginator :rows="20" class="p-datatable-sm">
         <Column header="Date" sortable field="function_date">
           <template #body="{ data }">{{ formatDate(data.function_date) }}</template>
@@ -160,14 +187,14 @@ onMounted(fetchReport)
         </Column>
         <Column header="Profit">
           <template #body="{ data }">
-            <span :class="data.total_bill - data.total_expenses >= 0 ? 'text-green-600' : 'text-red-600'">
+            <span :class="data.total_bill - data.total_expenses >= 0 ? 'text-[#10B981]' : 'text-red-500'">
               {{ formatCurrency(data.total_bill - data.total_expenses) }}
             </span>
           </template>
         </Column>
         <Column header="Status" field="status">
           <template #body="{ data }">
-            <Tag :value="data.status" :severity="getStatusSeverity(data.status)" class="capitalize" />
+            <Tag :value="getStatusLabel(data)" :severity="getStatusSeverity(getComputedStatus(data))" />
           </template>
         </Column>
       </DataTable>
