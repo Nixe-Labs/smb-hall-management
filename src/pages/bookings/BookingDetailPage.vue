@@ -10,7 +10,10 @@ import { calculateBookingSummary } from '@/lib/utils/calculations'
 import type { Booking, AdvancePayment, BillItem, Expense, Deposit, BillCategory, ExpenseCategory, BankAccount } from '@/types/database'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import TabView from 'primevue/tabview'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import Tab from 'primevue/tab'
+import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import AdvancePaymentList from '@/components/finance/AdvancePaymentList.vue'
 import BillItemsTable from '@/components/finance/BillItemsTable.vue'
@@ -240,47 +243,55 @@ onMounted(fetchAll)
 
       <!-- Tabs -->
       <div class="card-static overflow-hidden">
-        <TabView>
-          <TabPanel value="advances" header="Advances">
-            <AdvancePaymentList
-              :booking-id="bookingId"
-              :advances="advances"
-              :bank-accounts="bankAccounts"
-              :can-edit="canEdit"
-              @updated="fetchAll"
-            />
-          </TabPanel>
-          <TabPanel value="bill-items" header="Bill Items">
-            <BillItemsTable
-              :booking-id="bookingId"
-              :bill-items="billItems"
-              :categories="billCategories"
-              :can-edit="canEdit"
-              :can-delete="canDelete"
-              @updated="fetchAll"
-            />
-          </TabPanel>
-          <TabPanel value="expenses" header="Expenses">
-            <ExpensesTable
-              :booking-id="bookingId"
-              :expenses="expenses"
-              :categories="expenseCategories"
-              :can-edit="canEdit"
-              :can-delete="canDelete"
-              @updated="fetchAll"
-            />
-          </TabPanel>
-          <TabPanel value="deposits" header="Deposits">
-            <DepositsTable
-              :booking-id="bookingId"
-              :deposits="deposits"
-              :bank-accounts="bankAccounts"
-              :can-edit="canEdit"
-              :can-delete="canDelete"
-              @updated="fetchAll"
-            />
-          </TabPanel>
-        </TabView>
+        <Tabs value="advances">
+          <TabList>
+            <Tab value="advances">Advances</Tab>
+            <Tab value="bill-items">Bill Items</Tab>
+            <Tab value="expenses">Expenses</Tab>
+            <Tab value="deposits">Deposits</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel value="advances">
+              <AdvancePaymentList
+                :booking-id="bookingId"
+                :advances="advances"
+                :bank-accounts="bankAccounts"
+                :can-edit="canEdit"
+                @updated="fetchAll"
+              />
+            </TabPanel>
+            <TabPanel value="bill-items">
+              <BillItemsTable
+                :booking-id="bookingId"
+                :bill-items="billItems"
+                :categories="billCategories"
+                :can-edit="canEdit"
+                :can-delete="canDelete"
+                @updated="fetchAll"
+              />
+            </TabPanel>
+            <TabPanel value="expenses">
+              <ExpensesTable
+                :booking-id="bookingId"
+                :expenses="expenses"
+                :categories="expenseCategories"
+                :can-edit="canEdit"
+                :can-delete="canDelete"
+                @updated="fetchAll"
+              />
+            </TabPanel>
+            <TabPanel value="deposits">
+              <DepositsTable
+                :booking-id="bookingId"
+                :deposits="deposits"
+                :bank-accounts="bankAccounts"
+                :can-edit="canEdit"
+                :can-delete="canDelete"
+                @updated="fetchAll"
+              />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </div>
     </div>
 

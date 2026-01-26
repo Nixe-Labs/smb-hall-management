@@ -66,12 +66,12 @@ onUnmounted(() => {
       <nav class="glass-pill px-3 py-2 flex items-center justify-between gap-3 shadow-lg/5 transition-all duration-300">
         
         <!-- Logo -->
-        <div class="flex items-center gap-3 pl-2">
+        <router-link to="/dashboard" class="flex items-center gap-3 pl-2 cursor-pointer hover:opacity-80 transition-opacity">
           <div class="w-9 h-9 rounded-xl bg-[#10B981] flex items-center justify-center shrink-0 shadow-sm">
             <span class="font-bold text-white text-lg">S</span>
           </div>
           <span class="font-bold text-[#1F2937] text-lg tracking-tight">SMB Hall</span>
-        </div>
+        </router-link>
 
         <!-- Desktop Navigation -->
         <div class="hidden md:flex items-center gap-1 bg-[#F3F4F6]/80 p-1.5 rounded-full border border-white/50 backdrop-blur-sm">

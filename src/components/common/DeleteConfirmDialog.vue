@@ -41,7 +41,6 @@ function handleConfirm() {
   }
 }
 
-const severityColor = computed(() => props.severity === 'warn' ? 'orange' : 'red')
 const iconBgClass = computed(() => props.severity === 'warn' ? 'bg-orange-100' : 'bg-red-100')
 const iconTextClass = computed(() => props.severity === 'warn' ? 'text-orange-500' : 'text-red-500')
 const badgeBgClass = computed(() => props.severity === 'warn' ? 'bg-orange-50' : 'bg-red-50')

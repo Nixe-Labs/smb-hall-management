@@ -32,7 +32,7 @@ const chartCategories = ref<string[]>(allMonths)
 // Chart Options
 const chartOptions = computed(() => ({
   chart: {
-    type: 'bar',
+    type: 'bar' as const,
     toolbar: { show: false },
     fontFamily: 'Outfit, sans-serif',
     background: 'transparent'
@@ -110,11 +110,6 @@ function formatEventDate(dateStr: string) {
   return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
-function getDayName(dateStr: string) {
-  const date = new Date(dateStr + 'T00:00:00')
-  return date.toLocaleDateString('en-IN', { weekday: 'long' })
-}
-
 // Year navigation functions
 async function fetchRevenueData() {
   revenueLoading.value = true
@@ -177,10 +172,13 @@ function getEventStatus(event: Booking): 'completed' | 'ongoing' | 'upcoming' | 
 }
 
 // Get styling classes based on event status
-function getEventStyles(event: Booking) {
+type EventStyles = { card: string; icon: string; name: string; badge: string }
+type EventStatus = 'completed' | 'ongoing' | 'upcoming' | 'cancelled'
+
+function getEventStyles(event: Booking): EventStyles {
   const status = getEventStatus(event)
 
-  const styles: Record<string, { card: string; icon: string; name: string; badge: string }> = {
+  const styles: Record<EventStatus, EventStyles> = {
     completed: {
       card: 'bg-gray-50 border-gray-200 hover:bg-gray-100',
       icon: 'bg-gray-200 text-gray-500',
@@ -305,9 +303,9 @@ onMounted(async () => {
               <i class="pi pi-wallet text-[#10B981] text-xl"></i>
             </div>
           </div>
-          <div class="flex items-center text-xs text-[#10B981] font-medium bg-[#F0FDF4] w-fit px-2 py-1 rounded-full">
-            <i class="pi pi-arrow-up mr-1"></i>
-            <span>+12.5%</span>
+          <div class="flex items-center text-xs text-[#6B7280] bg-[#F0FDF4] w-fit px-2 py-1 rounded-full">
+            <i class="pi pi-wallet mr-1 text-[#10B981]"></i>
+            <span>All time</span>
           </div>
         </div>
 
@@ -323,8 +321,8 @@ onMounted(async () => {
             </div>
           </div>
           <div class="flex items-center text-xs text-[#6B7280] bg-gray-50 w-fit px-2 py-1 rounded-full">
-            <i class="pi pi-info-circle mr-1"></i>
-            <span>Track spending</span>
+            <i class="pi pi-shopping-bag mr-1"></i>
+            <span>All time</span>
           </div>
         </div>
 
