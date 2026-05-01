@@ -1,162 +1,179 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
-import { usePermissions } from '@/composables/usePermissions'
 import type { Booking } from '@/types/database'
-import DatePicker from 'primevue/datepicker'
-import Button from 'primevue/button'
 
 const router = useRouter()
-const { canEdit } = usePermissions()
 
-// Initialize with today's date
 const today = new Date()
 today.setHours(0, 0, 0, 0)
-const selectedDate = ref<Date>(today)
-const bookedDates = ref<Date[]>([])
-const bookingsOnDate = ref<Booking[]>([])
+const todayStr = today.toISOString().slice(0, 10)
+
+const currentMonth = ref(new Date(today.getFullYear(), today.getMonth(), 1))
+const selected = ref(todayStr)
+const bookings = ref<Booking[]>([])
 const loading = ref(true)
 
-async function fetchBookedDates() {
+const dateMap = computed(() => {
+  const m: Record<string, Booking[]> = {}
+  bookings.value.forEach(b => {
+    if (b.status === 'cancelled') return
+    if (!m[b.function_date]) m[b.function_date] = []
+    m[b.function_date]!.push(b)
+  })
+  return m
+})
+
+const calDays = computed(() => {
+  const first = new Date(currentMonth.value)
+  first.setDate(1)
+  const start = new Date(first)
+  start.setDate(start.getDate() - first.getDay())
+  const arr: Date[] = []
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    arr.push(d)
+  }
+  return arr
+})
+
+const monthName = computed(() =>
+  currentMonth.value.toLocaleDateString('en', { month: 'long', year: 'numeric' })
+)
+
+const selectedBookings = computed(() => dateMap.value[selected.value] ?? [])
+
+const selectedDateLabel = computed(() => {
+  const d = new Date(selected.value + 'T00:00:00')
+  return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+})
+
+function prevMonth() {
+  currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() - 1, 1)
+}
+
+function nextMonth() {
+  currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 1)
+}
+
+function dayIso(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+function getStatus(b: Booking): string {
+  if (b.status === 'cancelled') return 'cancelled'
+  const d = new Date(b.function_date + 'T00:00:00')
+  const t = new Date(); t.setHours(0, 0, 0, 0)
+  if (d.getTime() < t.getTime()) return 'completed'
+  if (d.getTime() === t.getTime()) return 'ongoing'
+  return 'upcoming'
+}
+
+const statusLabels: Record<string, string> = {
+  ongoing: 'Today', upcoming: 'Upcoming', completed: 'Completed', cancelled: 'Cancelled'
+}
+
+async function fetchBookings() {
   loading.value = true
   try {
     const { data } = await supabase
       .from('bookings')
-      .select('function_date, customer_name, status')
-      .neq('status', 'cancelled')
-
-    if (data) {
-      bookedDates.value = data.map(b => {
-        const [y, m, d] = b.function_date.split('-').map(Number)
-        return new Date(y, m - 1, d)
-      })
-    }
+      .select('id, function_date, customer_name, status')
+      .order('function_date')
+    bookings.value = (data as Booking[]) ?? []
   } finally {
     loading.value = false
   }
 }
 
-async function onDateSelect(date: Date) {
-  selectedDate.value = date
-  const dateStr = date.toISOString().split('T')[0]
-  const { data } = await supabase
-    .from('bookings')
-    .select('*')
-    .eq('function_date', dateStr)
-    .neq('status', 'cancelled')
-
-  bookingsOnDate.value = (data as Booking[]) ?? []
-}
-
-function isDateBooked(date: { day: number; month: number; year: number }): boolean {
-  return bookedDates.value.some(d =>
-    d.getDate() === date.day &&
-    d.getMonth() === date.month &&
-    d.getFullYear() === date.year
-  )
-}
-
-// Compute status from function date
-function getComputedStatus(booking: Booking): 'completed' | 'ongoing' | 'upcoming' | 'cancelled' {
-  if (booking.status === 'cancelled') return 'cancelled'
-
-  const eventDate = new Date(booking.function_date + 'T00:00:00')
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  if (eventDate.getTime() < today.getTime()) return 'completed'
-  if (eventDate.getTime() === today.getTime()) return 'ongoing'
-  return 'upcoming'
-}
-
-function getStatusLabel(booking: Booking): string {
-  const status = getComputedStatus(booking)
-  switch (status) {
-    case 'ongoing': return 'Today'
-    case 'completed': return 'Completed'
-    case 'cancelled': return 'Cancelled'
-    case 'upcoming': return 'Upcoming'
-    default: return ''
-  }
-}
-
-function getCardStyles(booking: Booking): string {
-  const status = getComputedStatus(booking)
-  switch (status) {
-    case 'completed': return 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-    case 'ongoing': return 'bg-[#F0FDF4] border-[#10B981]/20 hover:bg-[#D1FAE5]'
-    case 'upcoming': return 'bg-[#EFF6FF] border-blue-200 hover:bg-blue-100'
-    case 'cancelled': return 'bg-red-50 border-red-200 hover:bg-red-100'
-    default: return 'bg-[#F0FDF4] border-[#10B981]/20 hover:bg-[#D1FAE5]'
-  }
-}
-
-onMounted(async () => {
-  await fetchBookedDates()
-  // Load today's bookings by default
-  await onDateSelect(selectedDate.value)
-})
+onMounted(fetchBookings)
 </script>
 
 <template>
-  <div class="text-[#1F2937]">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-3xl font-bold text-[#1F2937]">Calendar</h1>
-      <Button
-        v-if="canEdit"
-        label="New Booking"
-        icon="pi pi-plus"
-        @click="router.push({ name: 'booking-create' })"
-      />
+  <div class="screen">
+    <!-- Header -->
+    <div style="display:flex;align-items:end;justify-content:space-between;margin-bottom:24px;padding-top:32px;flex-wrap:wrap;gap:16px" class="fade-in">
+      <div>
+        <div class="t-eyebrow" style="margin-bottom:12px">03 / Calendar</div>
+        <h1 class="t-h1">Schedule.</h1>
+      </div>
+      <button class="btn btn-primary" @click="router.push({ name: 'booking-create' })">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+        New booking
+      </button>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 card p-6">
-        <DatePicker
-          v-model="selectedDate"
-          inline
-          class="w-full"
-          @date-select="onDateSelect"
-        >
-          <template #date="{ date }">
-            <div class="flex flex-col items-center">
-              <span>{{ date.day }}</span>
-              <span
-                v-if="isDateBooked(date)"
-                class="w-1.5 h-1.5 rounded-full bg-[#10B981] mt-0.5"
-              ></span>
-            </div>
-          </template>
-        </DatePicker>
-      </div>
+    <div v-if="loading" class="loading-center">
+      <div class="smb-spinner"></div>
+    </div>
 
-      <div class="card p-6">
-        <h3 class="text-lg font-semibold text-[#1F2937] mb-4">
-          {{ selectedDate ? selectedDate.toLocaleDateString('en-IN', { dateStyle: 'medium' }) : 'Select a date' }}
-        </h3>
-        <div v-if="bookingsOnDate.length > 0" class="flex flex-col gap-3">
-          <div
-            v-for="b in bookingsOnDate"
-            :key="b.id"
-            class="p-3 rounded-lg cursor-pointer border transition-colors"
-            :class="getCardStyles(b)"
-            @click="router.push({ name: 'booking-detail', params: { id: b.id } })"
-          >
-            <div class="font-medium text-[#1F2937]">{{ b.customer_name }}</div>
-            <div class="text-sm text-[#6B7280]">{{ getStatusLabel(b) }}</div>
+    <div v-else class="cal-grid fade-up">
+      <!-- Calendar main -->
+      <div class="cal-main">
+        <div class="cal-month-header">
+          <div>
+            <div class="t-eyebrow" style="margin-bottom:8px">Month</div>
+            <h2 class="t-h2">{{ monthName }}</h2>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="smb-nav-iconbtn" @click="prevMonth">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+            </button>
+            <button class="smb-nav-iconbtn" @click="nextMonth">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </button>
           </div>
         </div>
-        <div v-else-if="selectedDate" class="text-[#9CA3AF]">
-          No bookings on this date
-          <Button
-            v-if="canEdit"
-            label="Book this date"
-            icon="pi pi-plus"
-            size="small"
-            class="mt-3"
-            @click="router.push({ name: 'booking-create' })"
-          />
+
+        <div class="cal-weekdays">
+          <div v-for="d in ['SUN','MON','TUE','WED','THU','FRI','SAT']" :key="d">{{ d }}</div>
+        </div>
+
+        <div class="cal-days">
+          <div
+            v-for="(d, i) in calDays"
+            :key="i"
+            :class="[
+              'cal-day',
+              d.getMonth() !== currentMonth.getMonth() ? 'is-other' : '',
+              dayIso(d) === todayStr ? 'is-today' : '',
+              dayIso(d) === selected ? 'is-selected' : '',
+            ]"
+            @click="selected = dayIso(d)"
+          >
+            <div class="cal-day-num">{{ d.getDate() }}</div>
+            <div v-if="dateMap[dayIso(d)]" class="cal-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Day sidebar -->
+      <div class="cal-side">
+        <div class="t-eyebrow" style="margin-bottom:8px">{{ selectedDateLabel }}</div>
+        <h3 class="t-h3" style="margin-bottom:24px">
+          {{ selectedBookings.length === 0 ? 'No bookings' : `${selectedBookings.length} booking${selectedBookings.length > 1 ? 's' : ''}` }}
+        </h3>
+
+        <div
+          v-for="b in selectedBookings"
+          :key="b.id"
+          class="act-item"
+          @click="router.push({ name: 'booking-detail', params: { id: b.id } })"
+        >
+          <div class="act-date">{{ b.id.slice(0, 8).toUpperCase() }}</div>
+          <div style="flex:1;min-width:0">
+            <div class="act-name reveal-line">{{ b.customer_name }}</div>
+          </div>
+          <span :class="['tag', 'tag-' + getStatus(b)]">{{ statusLabels[getStatus(b)] }}</span>
+        </div>
+
+        <div v-if="selectedBookings.length === 0" style="margin-top:16px">
+          <button class="btn btn-primary" @click="router.push({ name: 'booking-create' })">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+            Book this date
+          </button>
         </div>
       </div>
     </div>

@@ -5,14 +5,6 @@ import { useToast } from 'primevue/usetoast'
 import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate } from '@/lib/utils/dates'
 import type { Deposit, BankAccount } from '@/types/database'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Button from 'primevue/button'
-import InputNumber from 'primevue/inputnumber'
-import DatePicker from 'primevue/datepicker'
-import Select from 'primevue/select'
-import Dialog from 'primevue/dialog'
-import DeleteConfirmDialog from '@/components/common/DeleteConfirmDialog.vue'
 
 const props = defineProps<{
   bookingId: string
@@ -22,165 +14,193 @@ const props = defineProps<{
   canDelete?: boolean
 }>()
 
-const emit = defineEmits<{
-  updated: []
-}>()
+const emit = defineEmits<{ updated: [] }>()
 
 const toast = useToast()
+
 interface DepositForm {
   id?: string
   bank_account_id?: string
   amount?: number
-  deposit_date?: Date | null
+  deposit_date?: string
   notes?: string | null
 }
 
-const showDialog = ref(false)
-const editingItem = ref<DepositForm>({})
+const showModal = ref(false)
+const editing = ref<DepositForm>({})
 const saving = ref(false)
-const showDeleteDialog = ref(false)
-const itemToDelete = ref<Deposit | null>(null)
+const confirmDeleteId = ref<string | null>(null)
 const deleting = ref(false)
 
-function getAccountName(accountId: string): string {
-  return props.bankAccounts.find(a => a.id === accountId)?.name ?? 'Unknown'
+function accountName(id: string): string {
+  return props.bankAccounts.find(a => a.id === id)?.name ?? 'Unknown'
 }
 
 function openAdd() {
-  editingItem.value = { amount: 0, bank_account_id: '' }
-  showDialog.value = true
+  editing.value = { amount: 0, bank_account_id: '' }
+  showModal.value = true
 }
 
 function openEdit(item: Deposit) {
-  editingItem.value = {
+  editing.value = {
     id: item.id,
     bank_account_id: item.bank_account_id,
     amount: item.amount,
-    deposit_date: item.deposit_date ? new Date(item.deposit_date) : null,
+    deposit_date: item.deposit_date ?? '',
     notes: item.notes,
   }
-  showDialog.value = true
+  showModal.value = true
 }
 
 async function save() {
-  if (!editingItem.value.bank_account_id || !editingItem.value.amount) {
+  if (!editing.value.bank_account_id || !editing.value.amount) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Account and amount are required', life: 3000 })
     return
   }
-
   saving.value = true
   try {
-    const toDateStr = (d: Date | null | undefined) => d ? d.toISOString().split('T')[0] : null
     const payload = {
       booking_id: props.bookingId,
-      bank_account_id: editingItem.value.bank_account_id,
-      amount: editingItem.value.amount,
-      deposit_date: toDateStr(editingItem.value.deposit_date),
-      notes: editingItem.value.notes || null,
+      bank_account_id: editing.value.bank_account_id,
+      amount: editing.value.amount,
+      deposit_date: editing.value.deposit_date || null,
+      notes: editing.value.notes || null,
     }
-
-    if (editingItem.value.id) {
-      const { error } = await supabase.from('deposits').update(payload).eq('id', editingItem.value.id)
+    if (editing.value.id) {
+      const { error } = await supabase.from('deposits').update(payload).eq('id', editing.value.id)
       if (error) throw error
     } else {
       const { error } = await supabase.from('deposits').insert(payload)
       if (error) throw error
     }
-
-    showDialog.value = false
+    showModal.value = false
     emit('updated')
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Failed to save'
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to save'
     toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 })
   } finally {
     saving.value = false
   }
 }
 
-function openDeleteDialog(item: Deposit) {
-  itemToDelete.value = item
-  showDeleteDialog.value = true
-}
-
 async function confirmDelete() {
-  if (!itemToDelete.value) return
-
+  if (!confirmDeleteId.value) return
   deleting.value = true
   try {
-    const { error } = await supabase.from('deposits').delete().eq('id', itemToDelete.value.id)
+    const { error } = await supabase.from('deposits').delete().eq('id', confirmDeleteId.value)
     if (error) throw error
     emit('updated')
-  } catch (error: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
   } finally {
     deleting.value = false
-    showDeleteDialog.value = false
-    itemToDelete.value = null
+    confirmDeleteId.value = null
   }
 }
+
+const total = () => props.deposits.reduce((s, i) => s + i.amount, 0)
 </script>
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
-      <h4 class="font-medium text-[#6B7280]">Deposits</h4>
-      <Button v-if="canEdit" label="Add Deposit" icon="pi pi-plus" size="small" @click="openAdd" />
+    <div style="display:flex;justify-content:flex-end;padding:12px 0">
+      <button v-if="canEdit" class="btn" style="font-size:13px;padding:8px 14px" @click="openAdd" type="button">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+        Add deposit
+      </button>
     </div>
 
-    <DataTable :value="deposits" striped-rows class="p-datatable-sm">
-      <Column header="Account">
-        <template #body="{ data }">{{ getAccountName(data.bank_account_id) }}</template>
-      </Column>
-      <Column header="Date">
-        <template #body="{ data }">{{ formatDate(data.deposit_date) }}</template>
-      </Column>
-      <Column header="Amount" class="text-right">
-        <template #body="{ data }">{{ formatCurrency(data.amount) }}</template>
-      </Column>
-      <Column v-if="canEdit || canDelete" header="Actions" class="w-24">
-        <template #body="{ data }">
-          <div class="flex gap-1">
-            <Button v-if="canEdit" icon="pi pi-pencil" text rounded size="small" @click="openEdit(data)" />
-            <Button v-if="canDelete" icon="pi pi-trash" text rounded size="small" severity="danger" @click="openDeleteDialog(data)" />
-          </div>
-        </template>
-      </Column>
-      <template #empty>
-        <div class="text-center py-4 text-[#9CA3AF]">No deposits recorded</div>
-      </template>
-      <template #footer>
-        <div class="text-right font-bold">
-          Total: {{ formatCurrency(deposits.reduce((s, i) => s + i.amount, 0)) }}
-        </div>
-      </template>
-    </DataTable>
+    <div class="smb-table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Account</th>
+            <th>Notes</th>
+            <th style="text-align:right">Amount</th>
+            <th v-if="canEdit || canDelete" style="width:80px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="deposits.length === 0">
+            <td :colspan="(canEdit || canDelete) ? 5 : 4" style="text-align:center;color:var(--ash);padding:40px">No deposits recorded.</td>
+          </tr>
+          <tr v-for="item in deposits" :key="item.id">
+            <td>{{ item.deposit_date ? formatDate(item.deposit_date) : '—' }}</td>
+            <td style="font-weight:600">{{ accountName(item.bank_account_id) }}</td>
+            <td style="color:var(--ash)">{{ item.notes ?? '—' }}</td>
+            <td style="text-align:right;font-family:var(--font-display);font-weight:600">{{ formatCurrency(item.amount) }}</td>
+            <td v-if="canEdit || canDelete" style="text-align:right">
+              <div style="display:flex;gap:6px;justify-content:flex-end">
+                <button v-if="canEdit" class="st-textbtn" @click="openEdit(item)" type="button">Edit</button>
+                <button v-if="canDelete" class="st-textbtn st-textbtn-danger" @click="confirmDeleteId = item.id" type="button">Del</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+        <tfoot v-if="deposits.length > 0">
+          <tr>
+            <td colspan="3" style="font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ash)">Total</td>
+            <td style="text-align:right;font-family:var(--font-display);font-weight:700">{{ formatCurrency(total()) }}</td>
+            <td v-if="canEdit || canDelete"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
 
-    <Dialog v-model:visible="showDialog" header="Deposit" modal class="w-full max-w-sm">
-      <div class="flex flex-col gap-4">
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Bank Account *</label>
-          <Select v-model="editingItem.bank_account_id" :options="bankAccounts" option-label="name" option-value="id" placeholder="Select account" class="w-full" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Amount *</label>
-          <InputNumber v-model="editingItem.amount" mode="currency" currency="INR" locale="en-IN" class="w-full" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Deposit Date</label>
-          <DatePicker v-model="editingItem.deposit_date" date-format="dd/mm/yy" show-icon class="w-full" />
+    <Teleport to="body">
+      <div v-if="showModal" class="smb-modal-overlay" @click.self="showModal = false">
+        <div class="smb-modal">
+          <div class="smb-modal-header">
+            <h3 class="t-h3">{{ editing.id ? 'Edit' : 'Add' }} Deposit</h3>
+            <button class="smb-nav-iconbtn" @click="showModal = false" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="smb-modal-body">
+            <div class="form-stack">
+              <div>
+                <label class="field-label">Bank Account *</label>
+                <select class="input" v-model="editing.bank_account_id">
+                  <option value="">— Select account —</option>
+                  <option v-for="a in bankAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Amount (₹) *</label>
+                <input type="number" class="input" v-model.number="editing.amount" placeholder="0" min="0" />
+              </div>
+              <div>
+                <label class="field-label">Deposit Date</label>
+                <input type="date" class="input" v-model="editing.deposit_date" />
+              </div>
+              <div>
+                <label class="field-label">Notes</label>
+                <input class="input" v-model="editing.notes" placeholder="Optional notes" />
+              </div>
+            </div>
+          </div>
+          <div class="smb-modal-footer">
+            <button class="btn" @click="showModal = false" type="button">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving" type="button">{{ saving ? 'Saving…' : 'Save' }}</button>
+          </div>
         </div>
       </div>
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showDialog = false" />
-        <Button label="Save" icon="pi pi-check" :loading="saving" @click="save" />
-      </template>
-    </Dialog>
 
-    <DeleteConfirmDialog
-      v-model:visible="showDeleteDialog"
-      :item-name="itemToDelete ? getAccountName(itemToDelete.bank_account_id) : ''"
-      :loading="deleting"
-      @confirm="confirmDelete"
-    />
+      <div v-if="confirmDeleteId" class="smb-modal-overlay" @click.self="confirmDeleteId = null">
+        <div class="smb-modal" style="max-width:400px">
+          <div class="smb-modal-header">
+            <h3 class="t-h3">Delete deposit?</h3>
+          </div>
+          <div class="smb-modal-body">
+            <p style="color:var(--ash);line-height:1.6">This will permanently remove this deposit. This action cannot be undone.</p>
+          </div>
+          <div class="smb-modal-footer">
+            <button class="btn" @click="confirmDeleteId = null" type="button">Keep</button>
+            <button class="btn btn-danger" @click="confirmDelete" :disabled="deleting" type="button">{{ deleting ? 'Deleting…' : 'Delete' }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

@@ -8,19 +8,10 @@ import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate } from '@/lib/utils/dates'
 import { calculateBookingSummary } from '@/lib/utils/calculations'
 import type { Booking, AdvancePayment, BillItem, Expense, Deposit, BillCategory, ExpenseCategory, BankAccount } from '@/types/database'
-import Button from 'primevue/button'
-import Tag from 'primevue/tag'
-import Tabs from 'primevue/tabs'
-import TabList from 'primevue/tablist'
-import Tab from 'primevue/tab'
-import TabPanels from 'primevue/tabpanels'
-import TabPanel from 'primevue/tabpanel'
 import AdvancePaymentList from '@/components/finance/AdvancePaymentList.vue'
 import BillItemsTable from '@/components/finance/BillItemsTable.vue'
 import ExpensesTable from '@/components/finance/ExpensesTable.vue'
 import DepositsTable from '@/components/finance/DepositsTable.vue'
-import FinancialSummary from '@/components/finance/FinancialSummary.vue'
-import DeleteConfirmDialog from '@/components/common/DeleteConfirmDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,10 +19,13 @@ const toast = useToast()
 const { canEdit, canDelete } = usePermissions()
 
 const bookingId = computed(() => route.params.id as string)
-const showDeleteDialog = ref(false)
-const showCancelDialog = ref(false)
-const deleting = ref(false)
+const activeTab = ref('advances')
+const showCancel = ref(false)
+const showDelete = ref(false)
 const cancelling = ref(false)
+const deleting = ref(false)
+const loading = ref(true)
+
 const booking = ref<Booking | null>(null)
 const advances = ref<AdvancePayment[]>([])
 const billItems = ref<BillItem[]>([])
@@ -40,52 +34,26 @@ const deposits = ref<Deposit[]>([])
 const billCategories = ref<BillCategory[]>([])
 const expenseCategories = ref<ExpenseCategory[]>([])
 const bankAccounts = ref<BankAccount[]>([])
-const loading = ref(true)
 
 const summary = computed(() => {
   if (!booking.value) return null
-  return calculateBookingSummary(
-    booking.value.rent,
-    advances.value,
-    billItems.value,
-    expenses.value,
-    deposits.value
-  )
+  return calculateBookingSummary(booking.value.rent, advances.value, billItems.value, expenses.value, deposits.value)
 })
 
-// Auto-calculate status based on function date
 const computedStatus = computed(() => {
   if (!booking.value) return null
   if (booking.value.status === 'cancelled') return 'cancelled'
-
-  const eventDate = new Date(booking.value.function_date + 'T00:00:00')
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  if (eventDate.getTime() < today.getTime()) return 'completed'
-  if (eventDate.getTime() === today.getTime()) return 'ongoing'
+  const d = new Date(booking.value.function_date + 'T00:00:00')
+  const t = new Date(); t.setHours(0, 0, 0, 0)
+  if (d.getTime() < t.getTime()) return 'completed'
+  if (d.getTime() === t.getTime()) return 'ongoing'
   return 'upcoming'
 })
 
 const statusLabel = computed(() => {
-  switch (computedStatus.value) {
-    case 'ongoing': return 'Today'
-    case 'completed': return 'Completed'
-    case 'cancelled': return 'Cancelled'
-    case 'upcoming': return 'Upcoming'
-    default: return ''
-  }
+  const m: Record<string, string> = { ongoing: 'Today', completed: 'Completed', cancelled: 'Cancelled', upcoming: 'Upcoming' }
+  return m[computedStatus.value ?? ''] ?? ''
 })
-
-function getStatusSeverity(status: string | null): "success" | "info" | "danger" | "secondary" | "warn" | undefined {
-  switch (status) {
-    case 'completed': return 'secondary'
-    case 'ongoing': return 'success'
-    case 'upcoming': return 'info'
-    case 'cancelled': return 'danger'
-    default: return 'secondary'
-  }
-}
 
 async function fetchAll() {
   loading.value = true
@@ -100,7 +68,6 @@ async function fetchAll() {
       supabase.from('expense_categories').select('*').eq('is_active', true).order('sort_order'),
       supabase.from('bank_accounts').select('*').eq('is_active', true),
     ])
-
     booking.value = bookingRes.data as Booking
     advances.value = (advancesRes.data as AdvancePayment[]) ?? []
     billItems.value = (billItemsRes.data as BillItem[]) ?? []
@@ -117,207 +84,226 @@ async function fetchAll() {
 async function cancelBooking() {
   cancelling.value = true
   try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: 'cancelled' })
-      .eq('id', bookingId.value)
-
+    const { error } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId.value)
     if (error) throw error
-
     if (booking.value) booking.value.status = 'cancelled'
-    toast.add({ severity: 'success', summary: 'Cancelled', detail: 'Booking cancelled successfully', life: 3000 })
-  } catch (error: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
+    toast.add({ severity: 'success', summary: 'Cancelled', detail: 'Booking cancelled', life: 3000 })
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
   } finally {
     cancelling.value = false
-    showCancelDialog.value = false
+    showCancel.value = false
   }
 }
 
-async function generateInvoice() {
-  const { buildInvoiceDocument } = await import('@/lib/pdf/invoiceTemplate')
-  const { downloadInvoice } = await import('@/lib/pdf/pdfGenerator')
-
-  if (!booking.value || !summary.value) return
-
-  const doc = buildInvoiceDocument({
-    booking: booking.value,
-    advances: advances.value,
-    billItems: billItems.value,
-    billCategories: billCategories.value,
-    summary: summary.value,
-  })
-
-  downloadInvoice(doc, `Invoice-${booking.value.customer_name}-${booking.value.function_date}.pdf`)
-}
-
-async function handleDeleteBooking() {
+async function deleteBooking() {
   deleting.value = true
   try {
-    // Delete related records first (cascade)
     await Promise.all([
       supabase.from('advance_payments').delete().eq('booking_id', bookingId.value),
       supabase.from('bill_items').delete().eq('booking_id', bookingId.value),
       supabase.from('expenses').delete().eq('booking_id', bookingId.value),
       supabase.from('deposits').delete().eq('booking_id', bookingId.value),
     ])
-
-    // Delete the booking
-    const { error } = await supabase
-      .from('bookings')
-      .delete()
-      .eq('id', bookingId.value)
-
+    const { error } = await supabase.from('bookings').delete().eq('id', bookingId.value)
     if (error) throw error
-
-    toast.add({ severity: 'success', summary: 'Deleted', detail: 'Booking deleted successfully', life: 3000 })
+    toast.add({ severity: 'success', summary: 'Deleted', detail: 'Booking deleted', life: 3000 })
     router.push({ name: 'bookings' })
-  } catch (error: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
   } finally {
     deleting.value = false
-    showDeleteDialog.value = false
+    showDelete.value = false
   }
+}
+
+async function generateInvoice() {
+  const { buildInvoiceDocument } = await import('@/lib/pdf/invoiceTemplate')
+  const { downloadInvoice } = await import('@/lib/pdf/pdfGenerator')
+  if (!booking.value || !summary.value) return
+  const doc = buildInvoiceDocument({ booking: booking.value, advances: advances.value, billItems: billItems.value, billCategories: billCategories.value, summary: summary.value })
+  downloadInvoice(doc, `Invoice-${booking.value.customer_name}-${booking.value.function_date}.pdf`)
 }
 
 onMounted(fetchAll)
 </script>
 
 <template>
-  <div class="text-[#1F2937]">
-    <div class="flex items-center gap-3 mb-6">
-      <Button icon="pi pi-arrow-left" text rounded @click="router.back()" />
-      <h1 class="text-2xl md:text-3xl font-bold text-[#1F2937]">Booking Details</h1>
+  <div class="screen">
+    <!-- Back -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-top:24px" class="fade-in">
+      <button class="smb-nav-iconbtn" @click="router.push({ name: 'bookings' })">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      </button>
+      <span class="t-mono" style="color:var(--ash)">02 / BOOKINGS / {{ bookingId }}</span>
     </div>
 
-    <div v-if="loading" class="flex items-center justify-center h-96">
-      <div class="relative">
-        <div class="w-16 h-16 border-4 border-[#E5E7EB] border-t-[#10B981] rounded-full animate-spin"></div>
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold text-[#10B981]">SMB</div>
-      </div>
-    </div>
+    <div v-if="loading" class="loading-center"><div class="smb-spinner"></div></div>
 
-    <div v-else-if="booking">
-      <!-- Booking Info Card -->
-      <div class="card-static p-4 md:p-6 mb-6">
-        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+    <template v-else-if="booking">
+      <!-- Detail hero -->
+      <div class="detail-hero fade-up">
+        <div style="display:flex;align-items:start;justify-content:space-between;gap:24px;flex-wrap:wrap">
           <div>
-            <h2 class="text-xl font-semibold text-[#1F2937] mb-2">{{ booking.customer_name }}</h2>
-            <p class="text-[#6B7280]">{{ formatDate(booking.function_date) }}</p>
-            <p v-if="booking.customer_phone" class="text-[#6B7280] text-sm mt-1">{{ booking.customer_phone }}</p>
-            <p class="text-lg font-semibold text-[#1F2937] mt-3">Rent: {{ formatCurrency(booking.rent) }}</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 md:gap-3">
-            <Tag :value="statusLabel" :severity="getStatusSeverity(computedStatus)" />
-            <div class="flex items-center gap-2">
-              <Button
-                label="Invoice"
-                icon="pi pi-file-pdf"
-                severity="secondary"
-                size="small"
-                @click="generateInvoice"
-              />
-              <Button
-                v-if="canEdit && computedStatus !== 'cancelled'"
-                label="Cancel"
-                icon="pi pi-times"
-                severity="warn"
-                size="small"
-                @click="showCancelDialog = true"
-              />
-              <Button
-                v-if="canDelete"
-                label="Delete"
-                icon="pi pi-trash"
-                severity="danger"
-                size="small"
-                @click="showDeleteDialog = true"
-              />
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+              <span :class="['tag', 'tag-' + computedStatus]">{{ statusLabel }}</span>
+              <span class="t-mono" style="color:var(--ash)">{{ formatDate(booking.function_date) }}</span>
             </div>
+            <h1 class="t-h1" style="max-width:800px">{{ booking.customer_name }}.</h1>
+            <div v-if="booking.notes" style="color:var(--ash);margin-top:12px;font-size:14px">{{ booking.notes }}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-sm" @click="generateInvoice">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              Invoice
+            </button>
+            <button v-if="canEdit && computedStatus !== 'cancelled'" class="btn btn-sm btn-danger" @click="showCancel = true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+              Cancel
+            </button>
+            <button v-if="canDelete" class="btn btn-sm btn-danger" @click="showDelete = true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              Delete
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- Financial Summary -->
-      <FinancialSummary v-if="summary" :summary="summary" class="mb-6" />
+      <!-- Meta grid -->
+      <div class="detail-meta-grid fade-up delay-2">
+        <div class="detail-meta-cell">
+          <div class="label">Hall Rent</div>
+          <div class="value">{{ formatCurrency(booking.rent) }}</div>
+        </div>
+        <div class="detail-meta-cell">
+          <div class="label">Total Bill</div>
+          <div class="value">{{ summary ? formatCurrency(summary.total_bill) : '—' }}</div>
+        </div>
+        <div class="detail-meta-cell">
+          <div class="label">Collected</div>
+          <div class="value" style="color:var(--accent-ink)">{{ summary ? formatCurrency(summary.total_advance) : '—' }}</div>
+        </div>
+        <div class="detail-meta-cell">
+          <div class="label">Pending Balance</div>
+          <div class="value" :style="{ color: summary && (summary.total_bill - summary.total_advance) > 0 ? 'var(--signal-red)' : 'var(--ink)' }">
+            {{ summary ? formatCurrency(Math.max(summary.total_bill - summary.total_advance, 0)) : '—' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Customer + Financial summary -->
+      <div class="dash-grid fade-up delay-3" style="min-height:0">
+        <div style="min-height:0">
+          <div class="t-eyebrow" style="margin-bottom:8px">Customer</div>
+          <h2 class="t-h2" style="margin-bottom:24px">Contact</h2>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+            <div>
+              <div class="t-eyebrow" style="margin-bottom:8px">Phone</div>
+              <div style="font-size:16px">{{ booking.customer_phone || '—' }}</div>
+            </div>
+            <div>
+              <div class="t-eyebrow" style="margin-bottom:8px">Address</div>
+              <div style="font-size:14px;line-height:1.5">{{ booking.customer_address || '—' }}</div>
+            </div>
+          </div>
+        </div>
+        <div style="min-height:0">
+          <div class="t-eyebrow" style="margin-bottom:8px">Financial Summary</div>
+          <h2 class="t-h2" style="margin-bottom:24px">Breakdown</h2>
+          <div v-if="summary">
+            <div class="fin-row"><span class="fin-label">Total Bill</span><span class="fin-value">{{ formatCurrency(summary.total_bill) }}</span></div>
+            <div class="fin-row"><span class="fin-label">Total Advance</span><span class="fin-value">{{ formatCurrency(summary.total_advance) }}</span></div>
+            <div class="fin-row"><span class="fin-label">Total Expenses</span><span class="fin-value">{{ formatCurrency(summary.total_expenses) }}</span></div>
+            <div class="fin-row"><span class="fin-label">Total Deposits</span><span class="fin-value">{{ formatCurrency(summary.total_deposits) }}</span></div>
+            <div class="fin-row is-bold"><span class="fin-label">Pending Balance</span><span class="fin-value">{{ formatCurrency(Math.max(summary.total_bill - summary.total_advance, 0)) }}</span></div>
+            <div class="fin-row is-bold is-accent"><span class="fin-label">Net Profit</span><span class="fin-value">{{ formatCurrency(summary.total_bill - summary.total_expenses) }}</span></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Tabs -->
-      <div class="card-static overflow-hidden">
-        <Tabs value="advances">
-          <TabList>
-            <Tab value="advances">Advances</Tab>
-            <Tab value="bill-items">Bill Items</Tab>
-            <Tab value="expenses">Expenses</Tab>
-            <Tab value="deposits">Deposits</Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel value="advances">
-              <AdvancePaymentList
-                :booking-id="bookingId"
-                :advances="advances"
-                :bank-accounts="bankAccounts"
-                :can-edit="canEdit"
-                @updated="fetchAll"
-              />
-            </TabPanel>
-            <TabPanel value="bill-items">
-              <BillItemsTable
-                :booking-id="bookingId"
-                :bill-items="billItems"
-                :categories="billCategories"
-                :can-edit="canEdit"
-                :can-delete="canDelete"
-                @updated="fetchAll"
-              />
-            </TabPanel>
-            <TabPanel value="expenses">
-              <ExpensesTable
-                :booking-id="bookingId"
-                :expenses="expenses"
-                :categories="expenseCategories"
-                :can-edit="canEdit"
-                :can-delete="canDelete"
-                @updated="fetchAll"
-              />
-            </TabPanel>
-            <TabPanel value="deposits">
-              <DepositsTable
-                :booking-id="bookingId"
-                :deposits="deposits"
-                :bank-accounts="bankAccounts"
-                :can-edit="canEdit"
-                :can-delete="canDelete"
-                @updated="fetchAll"
-              />
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+      <div style="margin-top:32px" class="fade-up delay-4">
+        <div class="smb-tabs">
+          <button
+            v-for="t in [
+              { k: 'advances', l: 'Advances',  n: advances.length },
+              { k: 'bills',    l: 'Bill Items', n: billItems.length },
+              { k: 'expenses', l: 'Expenses',   n: expenses.length },
+              { k: 'deposits', l: 'Deposits',   n: deposits.length },
+            ]"
+            :key="t.k"
+            :class="['smb-tab', activeTab === t.k ? 'is-active' : '']"
+            @click="activeTab = t.k"
+          >
+            {{ t.l }} <span class="count">[{{ String(t.n).padStart(2,'0') }}]</span>
+          </button>
+        </div>
+
+        <div v-if="activeTab === 'advances'">
+          <AdvancePaymentList :booking-id="bookingId" :advances="advances" :bank-accounts="bankAccounts" :can-edit="canEdit" @updated="fetchAll" />
+        </div>
+        <div v-else-if="activeTab === 'bills'">
+          <BillItemsTable :booking-id="bookingId" :bill-items="billItems" :categories="billCategories" :can-edit="canEdit" :can-delete="canDelete" @updated="fetchAll" />
+        </div>
+        <div v-else-if="activeTab === 'expenses'">
+          <ExpensesTable :booking-id="bookingId" :expenses="expenses" :categories="expenseCategories" :can-edit="canEdit" :can-delete="canDelete" @updated="fetchAll" />
+        </div>
+        <div v-else-if="activeTab === 'deposits'">
+          <DepositsTable :booking-id="bookingId" :deposits="deposits" :bank-accounts="bankAccounts" :can-edit="canEdit" :can-delete="canDelete" @updated="fetchAll" />
+        </div>
       </div>
-    </div>
+    </template>
 
-    <div v-else class="text-center py-16 text-[#9CA3AF]">
-      Booking not found
-    </div>
+    <div v-else style="padding:80px 0;text-align:center;color:var(--ash)">Booking not found</div>
 
-    <!-- Cancel Confirmation Dialog -->
-    <DeleteConfirmDialog
-      v-model:visible="showCancelDialog"
-      :item-name="booking?.customer_name"
-      :loading="cancelling"
-      confirm-word="CANCEL"
-      title="Cancel Booking"
-      message="Are you sure you want to cancel this booking? The date will become available again."
-      button-label="Cancel Booking"
-      severity="warn"
-      @confirm="cancelBooking"
-    />
+    <!-- Cancel modal -->
+    <teleport to="body">
+      <div v-if="showCancel" class="smb-modal-overlay" @click.self="showCancel = false">
+        <div class="smb-modal">
+          <div class="smb-modal-head">
+            <h3 class="t-h3">Cancel booking?</h3>
+            <button class="smb-nav-iconbtn" @click="showCancel = false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+            </button>
+          </div>
+          <div class="smb-modal-body">
+            <p style="color:var(--ash);line-height:1.6">
+              This will mark <strong style="color:var(--ink)">{{ booking?.customer_name }}</strong>'s booking on
+              <strong style="color:var(--ink)">{{ formatDate(booking?.function_date ?? '') }}</strong> as cancelled.
+              The date will become available for new bookings.
+            </p>
+          </div>
+          <div class="smb-modal-foot">
+            <button class="btn" @click="showCancel = false">Keep</button>
+            <button class="btn btn-primary btn-danger" :disabled="cancelling" @click="cancelBooking">
+              {{ cancelling ? 'Cancelling…' : 'Cancel booking' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
-    <!-- Delete Confirmation Dialog -->
-    <DeleteConfirmDialog
-      v-model:visible="showDeleteDialog"
-      :item-name="booking?.customer_name"
-      :loading="deleting"
-      @confirm="handleDeleteBooking"
-    />
+      <div v-if="showDelete" class="smb-modal-overlay" @click.self="showDelete = false">
+        <div class="smb-modal">
+          <div class="smb-modal-head">
+            <h3 class="t-h3">Delete booking?</h3>
+            <button class="smb-nav-iconbtn" @click="showDelete = false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+            </button>
+          </div>
+          <div class="smb-modal-body">
+            <p style="color:var(--ash);line-height:1.6">
+              This will permanently delete <strong style="color:var(--ink)">{{ booking?.customer_name }}</strong>'s booking
+              and all associated records. This cannot be undone.
+            </p>
+          </div>
+          <div class="smb-modal-foot">
+            <button class="btn" @click="showDelete = false">Keep</button>
+            <button class="btn btn-primary btn-danger" :disabled="deleting" @click="deleteBooking">
+              {{ deleting ? 'Deleting…' : 'Delete booking' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>

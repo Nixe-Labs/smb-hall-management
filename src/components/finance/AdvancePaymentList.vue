@@ -6,11 +6,6 @@ import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate } from '@/lib/utils/dates'
 import type { AdvancePayment, BankAccount } from '@/types/database'
 import type { PaymentMethod } from '@/types/enums'
-import Button from 'primevue/button'
-import InputNumber from 'primevue/inputnumber'
-import DatePicker from 'primevue/datepicker'
-import Select from 'primevue/select'
-import Dialog from 'primevue/dialog'
 
 const props = defineProps<{
   bookingId: string
@@ -19,93 +14,76 @@ const props = defineProps<{
   canEdit: boolean
 }>()
 
-const emit = defineEmits<{
-  updated: []
-}>()
+const emit = defineEmits<{ updated: [] }>()
 
 interface AdvanceForm {
   id?: string
   advance_number?: number
   amount?: number
-  payment_date?: Date | null
+  payment_date?: string
   payment_method?: PaymentMethod | null
-  deposit_date?: Date | null
+  deposit_date?: string
   deposit_account_id?: string | null
 }
 
 const toast = useToast()
-const showDialog = ref(false)
-const editingAdvance = ref<AdvanceForm>({})
+const showModal = ref(false)
+const editing = ref<AdvanceForm>({})
 const saving = ref(false)
 
-const paymentMethods = [
-  { label: 'Cash', value: 'cash' },
-  { label: 'Cheque', value: 'cheque' },
-  { label: 'Online', value: 'online' },
-]
+const paymentMethods = ['cash', 'cheque', 'online']
 
 function openAdd() {
-  const nextNumber = (props.advances.length || 0) + 1
-  if (nextNumber > 3) {
+  const next = (props.advances.length ?? 0) + 1
+  if (next > 3) {
     toast.add({ severity: 'warn', summary: 'Limit', detail: 'Maximum 3 advance payments allowed', life: 3000 })
     return
   }
-  editingAdvance.value = {
-    advance_number: nextNumber,
-    amount: 0,
-    payment_method: 'cash' as PaymentMethod,
-  }
-  showDialog.value = true
+  editing.value = { advance_number: next, payment_method: 'cash' as PaymentMethod }
+  showModal.value = true
 }
 
 function openEdit(adv: AdvancePayment) {
-  editingAdvance.value = {
+  editing.value = {
     id: adv.id,
     advance_number: adv.advance_number,
     amount: adv.amount,
     payment_method: adv.payment_method,
-    payment_date: adv.payment_date ? new Date(adv.payment_date) : null,
-    deposit_date: adv.deposit_date ? new Date(adv.deposit_date) : null,
+    payment_date: adv.payment_date ?? '',
+    deposit_date: adv.deposit_date ?? '',
     deposit_account_id: adv.deposit_account_id,
   }
-  showDialog.value = true
+  showModal.value = true
 }
 
 async function save() {
-  if (!editingAdvance.value.amount) {
+  if (!editing.value.amount) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Amount is required', life: 3000 })
     return
   }
-
   saving.value = true
   try {
-    const toDateStr = (d: Date | null | undefined) => d ? d.toISOString().split('T')[0] : null
     const payload = {
       booking_id: props.bookingId,
-      advance_number: editingAdvance.value.advance_number,
-      amount: editingAdvance.value.amount,
-      payment_date: toDateStr(editingAdvance.value.payment_date),
-      payment_method: editingAdvance.value.payment_method || null,
-      deposit_date: toDateStr(editingAdvance.value.deposit_date),
-      deposit_account_id: editingAdvance.value.deposit_account_id || null,
+      advance_number: editing.value.advance_number,
+      amount: editing.value.amount,
+      payment_date: editing.value.payment_date || null,
+      payment_method: editing.value.payment_method || null,
+      deposit_date: editing.value.deposit_date || null,
+      deposit_account_id: editing.value.deposit_account_id || null,
     }
-
-    if (editingAdvance.value.id) {
-      const { error } = await supabase
-        .from('advance_payments')
-        .update(payload)
-        .eq('id', editingAdvance.value.id)
+    if (editing.value.id) {
+      const { error } = await supabase.from('advance_payments').update(payload).eq('id', editing.value.id)
       if (error) throw error
     } else {
       const { error } = await supabase.from('advance_payments').insert(payload)
       if (error) throw error
     }
-
     toast.add({ severity: 'success', summary: 'Saved', detail: 'Advance payment saved', life: 3000 })
-    showDialog.value = false
+    showModal.value = false
     emit('updated')
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Failed to save'
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to save'
     toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 })
   } finally {
     saving.value = false
@@ -120,64 +98,99 @@ async function remove(adv: AdvancePayment) {
     emit('updated')
   }
 }
+
+function accountName(id: string | null): string {
+  if (!id) return '—'
+  return props.bankAccounts.find(a => a.id === id)?.name ?? '—'
+}
 </script>
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
-      <h4 class="font-medium text-[#6B7280]">Advance Payments</h4>
-      <Button v-if="canEdit && advances.length < 3" label="Add Advance" icon="pi pi-plus" size="small" @click="openAdd" />
+    <div style="display:flex;justify-content:flex-end;padding:12px 0">
+      <button v-if="canEdit && advances.length < 3" class="btn" style="font-size:13px;padding:8px 14px" @click="openAdd" type="button">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+        Add advance
+      </button>
     </div>
 
-    <div v-if="advances.length === 0" class="text-center py-8 text-[#9CA3AF]">
-      No advance payments recorded
+    <div class="smb-table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th>Method</th>
+            <th>Account</th>
+            <th style="text-align:right">Amount</th>
+            <th v-if="canEdit" style="width:80px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="advances.length === 0">
+            <td :colspan="canEdit ? 6 : 5" style="text-align:center;color:var(--ash);padding:40px">No advances recorded.</td>
+          </tr>
+          <tr v-for="adv in advances" :key="adv.id">
+            <td style="font-family:var(--font-mono);font-size:12px">ADV-{{ String(adv.advance_number).padStart(2,'0') }}</td>
+            <td>{{ adv.payment_date ? formatDate(adv.payment_date) : '—' }}</td>
+            <td style="text-transform:capitalize;color:var(--ash)">{{ adv.payment_method ?? '—' }}</td>
+            <td style="color:var(--ash)">{{ accountName(adv.deposit_account_id) }}</td>
+            <td style="text-align:right;font-family:var(--font-display);font-weight:600">{{ formatCurrency(adv.amount) }}</td>
+            <td v-if="canEdit" style="text-align:right">
+              <div style="display:flex;gap:6px;justify-content:flex-end">
+                <button class="st-textbtn" @click="openEdit(adv)" type="button">Edit</button>
+                <button class="st-textbtn st-textbtn-danger" @click="remove(adv)" type="button">Del</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div v-else class="flex flex-col gap-3">
-      <div v-for="adv in advances" :key="adv.id" class="flex items-center justify-between p-4 bg-white rounded-xl border border-[#E5E7EB] shadow-sm hover:shadow-md hover:border-[#D1D5DB] transition-all">
-        <div>
-          <div class="font-medium text-[#1F2937]">Advance #{{ adv.advance_number }}</div>
-          <div class="text-sm text-[#6B7280]">
-            {{ formatCurrency(adv.amount) }}
-            <span v-if="adv.payment_method" class="capitalize"> • {{ adv.payment_method }}</span>
+    <Teleport to="body">
+      <div v-if="showModal" class="smb-modal-overlay" @click.self="showModal = false">
+        <div class="smb-modal">
+          <div class="smb-modal-header">
+            <h3 class="t-h3">{{ editing.id ? 'Edit' : 'Add' }} Advance</h3>
+            <button class="smb-nav-iconbtn" @click="showModal = false" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
           </div>
-          <div v-if="adv.payment_date" class="text-xs text-[#9CA3AF] mt-1">Paid: {{ formatDate(adv.payment_date) }}</div>
-        </div>
-        <div v-if="canEdit" class="flex gap-2">
-          <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" @click="openEdit(adv)" />
-          <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="remove(adv)" />
+          <div class="smb-modal-body">
+            <div class="form-stack">
+              <div>
+                <label class="field-label">Amount (₹) *</label>
+                <input type="number" class="input" v-model.number="editing.amount" placeholder="0" min="0" />
+              </div>
+              <div>
+                <label class="field-label">Payment Method</label>
+                <select class="input" v-model="editing.payment_method">
+                  <option v-for="m in paymentMethods" :key="m" :value="m" style="text-transform:capitalize">{{ m }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Payment Date</label>
+                <input type="date" class="input" v-model="editing.payment_date" />
+              </div>
+              <div>
+                <label class="field-label">Deposit Account</label>
+                <select class="input" v-model="editing.deposit_account_id">
+                  <option value="">— None —</option>
+                  <option v-for="a in bankAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Deposit Date</label>
+                <input type="date" class="input" v-model="editing.deposit_date" />
+              </div>
+            </div>
+          </div>
+          <div class="smb-modal-footer">
+            <button class="btn" @click="showModal = false" type="button">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving" type="button">{{ saving ? 'Saving…' : 'Save' }}</button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Add/Edit Dialog -->
-    <Dialog v-model:visible="showDialog" header="Advance Payment" modal class="w-full max-w-md">
-      <div class="flex flex-col gap-4">
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Amount *</label>
-          <InputNumber v-model="editingAdvance.amount" mode="currency" currency="INR" locale="en-IN" class="w-full" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Payment Method</label>
-          <Select v-model="editingAdvance.payment_method" :options="paymentMethods" option-label="label" option-value="value" class="w-full" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Payment Date</label>
-          <DatePicker v-model="editingAdvance.payment_date" date-format="dd/mm/yy" show-icon class="w-full" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Deposit Account</label>
-          <Select v-model="editingAdvance.deposit_account_id" :options="bankAccounts" option-label="name" option-value="id" placeholder="Select account" class="w-full" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#6B7280]">Deposit Date</label>
-          <DatePicker v-model="editingAdvance.deposit_date" date-format="dd/mm/yy" show-icon class="w-full" />
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showDialog = false" />
-        <Button label="Save" icon="pi pi-check" :loading="saving" @click="save" />
-      </template>
-    </Dialog>
+    </Teleport>
   </div>
 </template>

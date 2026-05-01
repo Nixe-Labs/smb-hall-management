@@ -1,52 +1,44 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useToast } from 'primevue/usetoast'
 import type { ExpenseCategory } from '@/types/database'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import InputNumber from 'primevue/inputnumber'
-import Dialog from 'primevue/dialog'
-import ToggleSwitch from 'primevue/toggleswitch'
 
 const router = useRouter()
 const toast = useToast()
 
 const categories = ref<ExpenseCategory[]>([])
 const loading = ref(true)
-const showDialog = ref(false)
+const showModal = ref(false)
 const editingItem = ref<Partial<ExpenseCategory>>({})
 const saving = ref(false)
 
+const activeCount = computed(() => categories.value.filter(c => c.is_active).length)
+const retiredCount = computed(() => categories.value.filter(c => !c.is_active).length)
+
 async function fetchCategories() {
   loading.value = true
-  const { data } = await supabase
-    .from('expense_categories')
-    .select('*')
-    .order('sort_order')
+  const { data } = await supabase.from('expense_categories').select('*').order('sort_order')
   categories.value = (data as ExpenseCategory[]) ?? []
   loading.value = false
 }
 
 function openAdd() {
   editingItem.value = { name: '', is_active: true, sort_order: categories.value.length + 1 }
-  showDialog.value = true
+  showModal.value = true
 }
 
 function openEdit(item: ExpenseCategory) {
   editingItem.value = { ...item }
-  showDialog.value = true
+  showModal.value = true
 }
 
 async function save() {
-  if (!editingItem.value.name) {
+  if (!editingItem.value.name?.trim()) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Name is required', life: 3000 })
     return
   }
-
   saving.value = true
   try {
     const payload = {
@@ -54,7 +46,6 @@ async function save() {
       is_active: editingItem.value.is_active ?? true,
       sort_order: editingItem.value.sort_order ?? 0,
     }
-
     if (editingItem.value.id) {
       const { error } = await supabase.from('expense_categories').update(payload).eq('id', editingItem.value.id)
       if (error) throw error
@@ -62,11 +53,10 @@ async function save() {
       const { error } = await supabase.from('expense_categories').insert(payload)
       if (error) throw error
     }
-
-    showDialog.value = false
+    showModal.value = false
     await fetchCategories()
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Failed to save'
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to save'
     toast.add({ severity: 'error', summary: 'Error', detail: msg, life: 5000 })
   } finally {
     saving.value = false
@@ -82,56 +72,105 @@ onMounted(fetchCategories)
 </script>
 
 <template>
-  <div class="text-[#1F2937]">
-    <div class="flex items-center justify-between mb-6">
-      <div class="flex items-center gap-3">
-        <Button icon="pi pi-arrow-left" text rounded @click="router.push({ name: 'settings' })" />
-        <h1 class="text-3xl font-bold text-[#1F2937]">Expense Categories</h1>
-      </div>
-      <Button label="Add Category" icon="pi pi-plus" @click="openAdd" />
-    </div>
-
-    <div class="card overflow-hidden">
-      <DataTable :value="categories" :loading="loading" striped-rows class="p-datatable-sm">
-        <Column field="name" header="Name" sortable />
-        <Column field="sort_order" header="Order" sortable class="w-20" />
-        <Column header="Active" class="w-24">
-          <template #body="{ data }">
-            <ToggleSwitch :model-value="data.is_active" @change="toggleActive(data)" />
-          </template>
-        </Column>
-        <Column header="Default" class="w-24">
-          <template #body="{ data }">
-            <span v-if="data.is_default" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Default</span>
-          </template>
-        </Column>
-        <Column header="Actions" class="w-20">
-          <template #body="{ data }">
-            <Button icon="pi pi-pencil" text rounded size="small" @click="openEdit(data)" />
-          </template>
-        </Column>
-      </DataTable>
-    </div>
-
-    <Dialog v-model:visible="showDialog" header="Expense Category" modal class="w-full max-w-sm">
-      <div class="flex flex-col gap-4">
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#1F2937]">Name *</label>
-          <InputText v-model="editingItem.name" placeholder="Category name" class="w-full" />
+  <div class="screen">
+    <div class="fade-in" style="margin-bottom:32px">
+      <button class="settings-back" @click="router.push({ name: 'settings' })" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+        Back to Settings
+      </button>
+      <div class="t-eyebrow" style="margin-bottom:12px;margin-top:24px">05 / 02 — Expense Categories</div>
+      <div class="settings-header-row">
+        <div class="settings-header-text">
+          <h1 class="t-h1">Where the money leaves.</h1>
+          <p style="color:var(--ash);margin-top:12px;max-width:560px">Operational costs by category. Tag every expense so the books tell a story.</p>
         </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-[#1F2937]">Sort Order</label>
-          <InputNumber v-model="editingItem.sort_order" class="w-full" />
-        </div>
-        <div class="flex items-center gap-2">
-          <ToggleSwitch v-model="editingItem.is_active" />
-          <label class="text-sm text-[#1F2937]">Active</label>
+        <div class="settings-header-action">
+          <button class="btn btn-primary" @click="openAdd" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+            New category
+          </button>
         </div>
       </div>
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showDialog = false" />
-        <Button label="Save" icon="pi pi-check" :loading="saving" @click="save" />
-      </template>
-    </Dialog>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin-bottom:32px" class="fade-up">
+      <div style="background:var(--paper);padding:20px 24px">
+        <div class="t-mono" style="color:var(--ash);font-size:11px">ACTIVE</div>
+        <div class="t-num" style="font-size:36px;margin-top:8px">{{ activeCount }}</div>
+      </div>
+      <div style="background:var(--paper);padding:20px 24px">
+        <div class="t-mono" style="color:var(--ash);font-size:11px">TOTAL</div>
+        <div class="t-num" style="font-size:36px;margin-top:8px">{{ categories.length }}</div>
+      </div>
+      <div style="background:var(--paper);padding:20px 24px">
+        <div class="t-mono" style="color:var(--ash);font-size:11px">RETIRED</div>
+        <div class="t-num" style="font-size:36px;margin-top:8px;color:var(--ash)">{{ retiredCount }}</div>
+      </div>
+    </div>
+
+    <div v-if="loading" class="loading-center"><div class="smb-spinner"></div></div>
+
+    <div v-else class="settings-table fade-up delay-2">
+      <div class="st-row st-head">
+        <div class="st-cell" style="flex:1 1 0">Category</div>
+        <div class="st-cell col-hide-narrow" style="flex:0 0 80px;text-align:center">Default</div>
+        <div class="st-cell" style="flex:0 0 110px;text-align:center">Status</div>
+        <div class="st-cell st-actions">Actions</div>
+      </div>
+      <div v-if="categories.length === 0" class="st-row">
+        <div class="st-cell" style="flex:1;color:var(--ash);padding:40px 0">No categories yet.</div>
+      </div>
+      <div v-for="item in categories" :key="item.id" class="st-row">
+        <div class="st-cell" data-label="Category" style="flex:1 1 0;font-weight:500">{{ item.name }}</div>
+        <div class="st-cell col-hide-narrow" data-label="Default" style="flex:0 0 80px;text-align:center">
+          <span v-if="item.is_default" class="pill pill-on">Yes</span>
+          <span v-else style="color:var(--ash)">—</span>
+        </div>
+        <div class="st-cell" data-label="Status" style="flex:0 0 110px;text-align:center">
+          <button :class="['pill', item.is_active ? 'pill-on' : 'pill-off']" @click="toggleActive(item)" type="button">
+            {{ item.is_active ? 'Active' : 'Retired' }}
+          </button>
+        </div>
+        <div class="st-cell st-actions">
+          <button class="st-textbtn" @click="openEdit(item)" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <Teleport to="body">
+      <div v-if="showModal" class="smb-modal-overlay" @click.self="showModal = false">
+        <div class="smb-modal">
+          <div class="smb-modal-header">
+            <h3 class="t-h3">{{ editingItem.id ? 'Edit' : 'New' }} Category</h3>
+            <button class="smb-nav-iconbtn" @click="showModal = false" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="smb-modal-body">
+            <div class="form-stack">
+              <div>
+                <label class="field-label">Name *</label>
+                <input class="input" v-model="editingItem.name" placeholder="Category name" />
+              </div>
+              <div>
+                <label class="field-label">Sort Order</label>
+                <input type="number" class="input" v-model.number="editingItem.sort_order" min="0" />
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <input type="checkbox" id="exp_active" :checked="editingItem.is_active" @change="e => editingItem.is_active = (e.target as HTMLInputElement).checked" style="width:16px;height:16px" />
+                <label for="exp_active" class="field-label" style="margin-bottom:0">Active</label>
+              </div>
+            </div>
+          </div>
+          <div class="smb-modal-footer">
+            <button class="btn" @click="showModal = false" type="button">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving" type="button">{{ saving ? 'Saving…' : 'Save' }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
