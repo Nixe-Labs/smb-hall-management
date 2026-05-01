@@ -118,11 +118,11 @@ async function handleSignOut() {
     <main class="shell-main">
       <!-- Topbar -->
       <header class="shell-topbar">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <span class="t-mono" style="color:var(--ash-2)">SMB / {{ breadcrumb }}</span>
+        <div style="display:flex; align-items:center; gap:12px; min-width:0; flex:1;">
+          <span class="t-mono topbar-breadcrumb" style="color:var(--ash-2)">SMB / {{ breadcrumb }}</span>
         </div>
-        <div style="display:flex; align-items:center; gap:16px;">
-          <span class="t-mono" style="color:var(--ash)">{{ todayStr }}</span>
+        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+          <span class="t-mono topbar-date" style="color:var(--ash)">{{ todayStr }}</span>
           <button class="smb-nav-iconbtn" @click="toggleDark" :title="isDark ? 'Light mode' : 'Dark mode'">
             <svg v-if="isDark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3a9 9 0 1 0 9 9c-3 0-9-2-9-9z"/></svg>
@@ -144,12 +144,21 @@ async function handleSignOut() {
     <nav class="smb-mobile-nav">
       <div class="smb-mobile-nav-items">
         <a
-          v-for="item in navItems.slice(0, 5)"
+          v-for="item in navItems"
           :key="item.key"
           :class="['smb-mobile-nav-item', activeRoot === item.key ? 'is-active' : '']"
           @click="router.push({ name: item.to })"
         >
-          <span>{{ item.code }}</span>
+          <!-- Dashboard -->
+          <svg v-if="item.key === 'dashboard'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <!-- Bookings -->
+          <svg v-else-if="item.key === 'bookings'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+          <!-- Calendar -->
+          <svg v-else-if="item.key === 'bookings-calendar'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <!-- Reports -->
+          <svg v-else-if="item.key === 'reports'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+          <!-- Settings -->
+          <svg v-else-if="item.key === 'settings'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
           <span>{{ item.label }}</span>
         </a>
       </div>
@@ -163,4 +172,13 @@ async function handleSignOut() {
 }
 .smb-fade-enter-from { opacity: 0; transform: translateY(8px); }
 .smb-fade-leave-to  { opacity: 0; transform: translateY(-4px); }
+
+.topbar-breadcrumb {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .topbar-date { display: none; }
+}
 </style>

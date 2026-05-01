@@ -84,7 +84,7 @@ async function handleSubmit() {
         <label class="field-label">Function Date *</label>
         <input type="date" class="input" v-model="form.function_date" required />
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="form-grid-2">
         <div>
           <label class="field-label">Customer Name *</label>
           <input class="input" v-model="form.customer_name" placeholder="Full name" required />

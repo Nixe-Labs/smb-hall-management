@@ -196,7 +196,7 @@ onMounted(fetchAll)
         <div style="min-height:0">
           <div class="t-eyebrow" style="margin-bottom:8px">Customer</div>
           <h2 class="t-h2" style="margin-bottom:24px">Contact</h2>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div class="form-grid-2" style="gap:24px">
             <div>
               <div class="t-eyebrow" style="margin-bottom:8px">Phone</div>
               <div style="font-size:16px">{{ booking.customer_phone || '—' }}</div>
