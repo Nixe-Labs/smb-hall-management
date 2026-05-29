@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { parseISO, format, addDays, differenceInCalendarDays } from 'date-fns'
 import { supabase } from '@/lib/supabase'
-import { formatTimeRange } from '@/lib/utils/dates'
+import { formatTimeRange, toISODate } from '@/lib/utils/dates'
 import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
 import { getDemandForDate, type DemandTier } from '@/lib/utils/tamilDemand'
 import {
@@ -16,7 +16,7 @@ const router = useRouter()
 
 const today = new Date()
 today.setHours(0, 0, 0, 0)
-const todayStr = today.toISOString().slice(0, 10)
+const todayStr = toISODate(today)
 
 type ViewMode = 'gregorian' | 'tamil'
 const viewMode = ref<ViewMode>('gregorian')
@@ -43,7 +43,7 @@ const dateMap = computed(() => {
 })
 
 function dayIso(d: Date) {
-  return d.toISOString().slice(0, 10)
+  return toISODate(d)
 }
 
 // ── Gregorian grid ──────────────────────────────────────────

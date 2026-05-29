@@ -4,7 +4,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from './auth'
 import { dueInDays } from '@/lib/utils/forecast'
-import { formatDate } from '@/lib/utils/dates'
+import { formatDate, toISODate } from '@/lib/utils/dates'
 import type { AppNotification, BookingAdvanceForecast, BookingPaymentStatus } from '@/types/database'
 
 function fmt(n: number): string {
@@ -67,10 +67,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().slice(0, 10)
+    const todayStr = toISODate(today)
     const in7 = new Date(today)
     in7.setDate(in7.getDate() + 7)
-    const in7Str = in7.toISOString().slice(0, 10)
+    const in7Str = toISODate(in7)
 
     const desired: NewNotification[] = []
 
@@ -168,7 +168,11 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
 
     if (desired.length) {
-      await supabase.from('notifications').upsert(desired, { onConflict: 'dedupe_key', ignoreDuplicates: true })
+      // Upsert merging on dedupe_key: refresh title/body/severity on existing
+      // rows (so "5d overdue" doesn't stay stale). `created_at` isn't in the
+      // payload so the original creation time is preserved; read state lives
+      // in notification_reads and is unaffected.
+      await supabase.from('notifications').upsert(desired, { onConflict: 'dedupe_key' })
       await fetchAll()
     }
   }

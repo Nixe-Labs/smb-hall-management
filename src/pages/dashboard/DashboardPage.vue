@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils/currency'
+import { toISODate } from '@/lib/utils/dates'
 import { bucketForBooking, dueLabel, summarize, FORECAST_BUCKET_LABEL, type ForecastBucket } from '@/lib/utils/forecast'
 import ForecastPopover from '@/components/finance/ForecastPopover.vue'
 import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
@@ -79,7 +80,7 @@ function paymentPaidAmount(id: string): number {
 }
 
 const today = new Date()
-const todayStr = today.toISOString().slice(0, 10)
+const todayStr = toISODate(today)
 const todayFormatted = today.toLocaleDateString('en-IN', {
   weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
 }).toUpperCase()
@@ -150,8 +151,8 @@ async function fetchData() {
     startOfWeek.setDate(today.getDate() - today.getDay())
     const endOfWeek = new Date(startOfWeek)
     endOfWeek.setDate(startOfWeek.getDate() + 6)
-    const weekStart = startOfWeek.toISOString().slice(0, 10)
-    const weekEnd = endOfWeek.toISOString().slice(0, 10)
+    const weekStart = toISODate(startOfWeek)
+    const weekEnd = toISODate(endOfWeek)
     const yearStart = `${currentYear}-01-01`
     const yearEnd = `${currentYear}-12-31`
 

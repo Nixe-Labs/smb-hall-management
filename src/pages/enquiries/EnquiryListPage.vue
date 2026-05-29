@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
-import { formatDate } from '@/lib/utils/dates'
+import { formatDate, toISODate } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
 import type { Enquiry, EnquiryDate } from '@/types/database'
 import type { EnquiryStatus } from '@/types/enums'
@@ -103,7 +103,7 @@ function exportCSV() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `smb-enquiries-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `smb-enquiries-${toISODate(new Date())}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }

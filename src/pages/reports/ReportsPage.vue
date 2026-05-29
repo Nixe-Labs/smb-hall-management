@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils/currency'
-import { formatDate } from '@/lib/utils/dates'
+import { formatDate, toISODate } from '@/lib/utils/dates'
 import {
   summarize as summarizeForecast,
   bucketForBooking,
@@ -80,7 +80,7 @@ function resetFilters() {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  return toISODate(d)
 }
 
 function applyPresetToInputs(preset: DatePreset) {
