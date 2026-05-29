@@ -661,7 +661,6 @@ onMounted(fetchData)
             <span class="t-display-italic">"Every wedding here is the most important day of someone's life. </span>
             <span>We just keep the books straight."</span>
           </p>
-          <div class="t-mono" style="color: var(--ash); margin-top: 16px">— SMB MARRIAGE HALL · TIRUNELVELI</div>
         </div>
       </template>
     </div>

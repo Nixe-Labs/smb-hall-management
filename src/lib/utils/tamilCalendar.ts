@@ -1,4 +1,5 @@
 import { MhahPanchang } from 'mhah-panchang'
+import { addDays, parseISO, format, differenceInCalendarDays } from 'date-fns'
 
 // SMB hall is in Tirunelveli, Tamil Nadu. Panchangam is computed at the
 // location's sunrise, so the coordinates matter (only slightly within TN).
@@ -92,4 +93,63 @@ export function getTamilDate(dateStr: string | null | undefined): TamilDate | nu
 export function tamilDateLabel(t: TamilDate | null): string {
   if (!t) return ''
   return `${t.month.en} · ${PAKSHA_LABEL[t.paksha].short}`
+}
+
+// ──────────────────────────────────────────────────────────────
+// Tamil-month spans (for a Tamil-organized calendar view)
+// ──────────────────────────────────────────────────────────────
+
+function isoShift(iso: string, days: number): string {
+  return format(addDays(parseISO(iso), days), 'yyyy-MM-dd')
+}
+
+export interface TamilMonthSpan {
+  month: TamilMonth
+  startISO: string   // Gregorian date of Tamil day 1
+  endISO: string     // Gregorian date of the last Tamil day
+  length: number     // number of days in the Tamil month
+}
+
+/**
+ * The Gregorian start/end of the Tamil (solar) month containing `dateStr`.
+ * Walks day-by-day until the sun's sidereal sign changes (months are ~29-32
+ * days). getTamilDate is memoized, so this stays cheap.
+ */
+export function getTamilMonthSpan(dateStr: string | null | undefined): TamilMonthSpan | null {
+  const base = getTamilDate(dateStr)
+  if (!base || !dateStr) return null
+  const ino = base.month.ino
+
+  let start = dateStr
+  for (let i = 0; i < 40; i++) {
+    const prev = isoShift(start, -1)
+    if (getTamilDate(prev)?.month.ino !== ino) break
+    start = prev
+  }
+  let end = dateStr
+  for (let i = 0; i < 40; i++) {
+    const next = isoShift(end, 1)
+    if (getTamilDate(next)?.month.ino !== ino) break
+    end = next
+  }
+  return {
+    month: base.month,
+    startISO: start,
+    endISO: end,
+    length: differenceInCalendarDays(parseISO(end), parseISO(start)) + 1,
+  }
+}
+
+/** Tamil day-of-month number (1-based) for a Gregorian date. */
+export function tamilDayOfMonth(dateStr: string | null | undefined): number | null {
+  const span = getTamilMonthSpan(dateStr)
+  if (!span || !dateStr) return null
+  return differenceInCalendarDays(parseISO(dateStr), parseISO(span.startISO)) + 1
+}
+
+/** A Gregorian date that lands inside the previous/next Tamil month. */
+export function shiftTamilMonth(dateStr: string, delta: 1 | -1): string {
+  const span = getTamilMonthSpan(dateStr)
+  if (!span) return dateStr
+  return delta > 0 ? isoShift(span.endISO, 1) : isoShift(span.startISO, -1)
 }

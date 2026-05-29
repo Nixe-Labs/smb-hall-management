@@ -38,6 +38,7 @@ const matchingEnquiries = ref<EnquiryMatch[]>([])
 const loadingEnquiries = ref(false)
 
 const booking = ref<Booking | null>(null)
+const creatorName = ref<string | null>(null)
 const advances = ref<AdvancePayment[]>([])
 const billItems = ref<BillItem[]>([])
 const expenses = ref<Expense[]>([])
@@ -136,6 +137,14 @@ async function fetchAll() {
     billCategories.value = (billCatRes.data as BillCategory[]) ?? []
     expenseCategories.value = (expCatRes.data as ExpenseCategory[]) ?? []
     bankAccounts.value = (bankRes.data as BankAccount[]) ?? []
+
+    // Resolve who created the booking
+    creatorName.value = null
+    if (booking.value?.created_by) {
+      const { data: prof } = await supabase
+        .from('profiles').select('full_name').eq('id', booking.value.created_by).single()
+      creatorName.value = (prof as { full_name: string | null } | null)?.full_name ?? null
+    }
   } finally {
     loading.value = false
   }
@@ -226,6 +235,7 @@ onMounted(fetchAll)
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
               <span :class="['tag', 'tag-' + computedStatus]">{{ statusLabel }}</span>
               <span class="t-mono" style="color:var(--ash)">{{ formatDate(booking.function_date) }}</span>
+              <span v-if="creatorName" class="t-mono" style="color:var(--ash)">· Booked by {{ creatorName }}</span>
             </div>
             <h1 class="t-h1" style="max-width:800px">{{ booking.customer_name }}.</h1>
             <div class="t-mono" style="color:var(--ash);margin-top:12px;font-size:12px;letter-spacing:0.04em">
