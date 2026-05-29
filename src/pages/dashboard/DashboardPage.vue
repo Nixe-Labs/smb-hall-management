@@ -263,7 +263,6 @@ onMounted(fetchData)
             <span class="masthead-title t-display-italic">The Ledger</span>
           </div>
           <div class="masthead-r">
-            <div class="t-mono" style="color: var(--ash)">SMB · TIRUNELVELI</div>
             <div class="t-mono" style="color: var(--ash)">EST. 1996 · ₹ FY {{ currentYear }}</div>
           </div>
         </div>
