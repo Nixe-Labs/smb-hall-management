@@ -3,11 +3,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils/currency'
-import { formatDate } from '@/lib/utils/dates'
+import { formatDate, formatTimeRange } from '@/lib/utils/dates'
+import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
+import { buildDemandHistory, type DemandHistory } from '@/lib/utils/tamilDemand'
 import type { Booking } from '@/types/database'
 
 const router = useRouter()
 const bookings = ref<Booking[]>([])
+const demandHistory = ref<DemandHistory | null>(null)
 const loading = ref(true)
 const search = ref('')
 const statusFilter = ref('all')
@@ -44,6 +47,9 @@ async function fetchBookings() {
       .select('*')
       .order('function_date', { ascending: false })
     bookings.value = (data as Booking[]) ?? []
+    demandHistory.value = buildDemandHistory(
+      bookings.value.filter(b => b.status !== 'cancelled').map(b => b.function_date)
+    )
   } finally {
     loading.value = false
   }
@@ -89,7 +95,7 @@ onMounted(fetchBookings)
 
     <!-- Table -->
     <div v-else class="smb-table-wrap fade-up delay-2">
-      <table class="table">
+      <table class="table table-cards">
         <thead>
           <tr>
             <th style="width:130px">ID</th>
@@ -109,11 +115,19 @@ onMounted(fetchBookings)
             :key="b.id"
             @click="router.push({ name: 'booking-detail', params: { id: b.id } })"
           >
-            <td style="font-family:var(--font-mono);font-size:12px;color:var(--ash)">{{ b.id }}</td>
-            <td>{{ formatDate(b.function_date) }}</td>
-            <td style="font-weight:600">{{ b.customer_name }}</td>
-            <td style="text-align:right;font-family:var(--font-display);font-weight:600;font-variant-numeric:tabular-nums">{{ formatCurrency(b.rent) }}</td>
-            <td>
+            <td data-label="ID" style="font-family:var(--font-mono);font-size:12px;color:var(--ash)">{{ b.id }}</td>
+            <td data-label="Date">
+              {{ formatDate(b.function_date) }}
+              <div v-if="formatTimeRange(b.start_time, b.end_time)" style="font-family:var(--font-mono);font-size:11px;color:var(--ash);margin-top:3px;letter-spacing:0.03em">
+                {{ formatTimeRange(b.start_time, b.end_time) }}
+              </div>
+              <div style="margin-top:4px">
+                <TamilDemandBadge :date-str="b.function_date" :history="demandHistory" variant="mini" />
+              </div>
+            </td>
+            <td data-label="Customer" style="font-weight:600">{{ b.customer_name }}</td>
+            <td data-label="Rent" style="text-align:right;font-family:var(--font-display);font-weight:600;font-variant-numeric:tabular-nums">{{ formatCurrency(b.rent) }}</td>
+            <td data-label="Status">
               <span :class="['tag', 'tag-' + getStatus(b)]">{{ statusLabels[getStatus(b)] }}</span>
             </td>
             <td>

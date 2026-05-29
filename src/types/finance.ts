@@ -1,11 +1,14 @@
 export interface BookingSummary {
   rent: number
   total_bill: number
+  bill_items_total: number
   total_advance: number
+  total_deposits: number
+  total_paid: number
   balance_collected: number
   total_expenses: number
-  total_deposits: number
   pending_balance: number
+  net_profit: number
   excess_shortage: number
 }
 

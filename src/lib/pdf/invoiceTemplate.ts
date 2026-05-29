@@ -2,7 +2,9 @@ import type { TDocumentDefinitions, Content, ContentColumns, ContentTable } from
 import type { Booking, AdvancePayment, BillItem, BillCategory } from '@/types/database'
 import type { BookingSummary } from '@/types/finance'
 import { formatCurrency } from '@/lib/utils/currency'
-import { formatDate } from '@/lib/utils/dates'
+import { formatDate, formatTimeRange } from '@/lib/utils/dates'
+import { formatRange } from '@/lib/utils/slots'
+import { getTamilDate, PAKSHA_LABEL } from '@/lib/utils/tamilCalendar'
 
 interface InvoiceData {
   booking: Booking
@@ -43,16 +45,24 @@ export function buildInvoiceDocument(data: InvoiceData): TDocumentDefinitions {
     customerStack.push({ text: `Address: ${booking.customer_address}` })
   }
 
+  const functionStack: Content[] = [
+    { text: `Function Date: ${formatDate(booking.function_date)}`, alignment: 'right' as const },
+    { text: `Hall Use: ${formatRange(booking)}`, alignment: 'right' as const },
+  ]
+  const tamil = getTamilDate(booking.function_date)
+  if (tamil) {
+    functionStack.push({ text: `Tamil Month: ${tamil.month.en} (${tamil.month.ta}) · ${PAKSHA_LABEL[tamil.paksha].short}`, alignment: 'right' as const })
+  }
+  const hallUseTime = formatTimeRange(booking.start_time, booking.end_time)
+  if (hallUseTime) {
+    functionStack.push({ text: `Time: ${hallUseTime}`, alignment: 'right' as const })
+  }
+  functionStack.push({ text: `Status: ${booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}`, alignment: 'right' as const })
+
   const customerSection: ContentColumns = {
     columns: [
       { width: '*', stack: customerStack },
-      {
-        width: 'auto',
-        stack: [
-          { text: `Function Date: ${formatDate(booking.function_date)}`, alignment: 'right' as const },
-          { text: `Status: ${booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}`, alignment: 'right' as const },
-        ],
-      },
+      { width: 'auto', stack: functionStack },
     ],
     margin: [0, 0, 0, 20] as [number, number, number, number],
   }
@@ -68,8 +78,8 @@ export function buildInvoiceDocument(data: InvoiceData): TDocumentDefinitions {
         ],
         ...billItemRows,
         [
-          { text: 'Total Bill', bold: true },
-          { text: formatCurrency(summary.total_bill), bold: true, alignment: 'right' as const },
+          { text: 'Bill Items Subtotal', bold: true },
+          { text: formatCurrency(summary.bill_items_total), bold: true, alignment: 'right' as const },
         ],
       ],
     },
@@ -111,10 +121,18 @@ export function buildInvoiceDocument(data: InvoiceData): TDocumentDefinitions {
     table: {
       widths: ['*', 'auto'],
       body: [
-        ['Total Bill', { text: formatCurrency(summary.total_bill), alignment: 'right' as const }],
+        ['Hall Rent', { text: formatCurrency(summary.rent), alignment: 'right' as const }],
+        ['Bill Items', { text: formatCurrency(summary.bill_items_total), alignment: 'right' as const }],
+        [
+          { text: 'Total Bill', bold: true },
+          { text: formatCurrency(summary.total_bill), bold: true, alignment: 'right' as const },
+        ],
         ['Advance Received', { text: formatCurrency(summary.total_advance), alignment: 'right' as const }],
-        ['Balance Collected', { text: formatCurrency(summary.balance_collected), alignment: 'right' as const }],
-        ['Total Expenses', { text: formatCurrency(summary.total_expenses), alignment: 'right' as const }],
+        ['Deposits', { text: formatCurrency(summary.total_deposits), alignment: 'right' as const }],
+        [
+          { text: 'Total Paid', bold: true },
+          { text: formatCurrency(summary.total_paid), bold: true, alignment: 'right' as const },
+        ],
         [
           { text: 'Pending Balance', bold: true },
           { text: formatCurrency(summary.pending_balance), bold: true, alignment: 'right' as const },

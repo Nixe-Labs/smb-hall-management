@@ -1,4 +1,5 @@
 import type { Booking, AdvancePayment, BillItem, Expense, Deposit } from './database'
+import type { DaySlot } from './enums'
 import type { BookingSummary } from './finance'
 
 export interface BookingWithDetails extends Booking {
@@ -11,12 +12,20 @@ export interface BookingWithDetails extends Booking {
 
 export interface BookingFormData {
   function_date: string
+  start_date: string
+  start_slot: DaySlot
+  end_date: string
+  end_slot: DaySlot
+  start_time: string | null
+  end_time: string | null
   customer_name: string
   customer_phone: string
   customer_address: string
   rent: number
   status: Booking['status']
   notes: string
+  expected_advance_amount: number | null
+  advance_due_date: string | null
 }
 
 export interface AdvancePaymentFormData {

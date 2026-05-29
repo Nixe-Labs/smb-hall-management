@@ -27,26 +27,40 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function initialize() {
-    loading.value = true
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      user.value = session?.user ?? null
-      if (user.value) {
-        await fetchProfile()
-      }
+  // Guard so initialize() runs exactly once even though both App.vue (on
+  // mount) and the router guard call it — otherwise we'd register the auth
+  // listener twice.
+  let initPromise: Promise<void> | null = null
 
-      supabase.auth.onAuthStateChange(async (_event, session) => {
+  async function initialize() {
+    if (initPromise) return initPromise
+    initPromise = (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
         user.value = session?.user ?? null
         if (user.value) {
           await fetchProfile()
-        } else {
-          profile.value = null
         }
-      })
-    } finally {
-      loading.value = false
-    }
+
+        // IMPORTANT: keep this callback synchronous. Making an async Supabase
+        // call (e.g. fetchProfile → supabase.from) *inside* onAuthStateChange
+        // deadlocks supabase-js's auth lock — every subsequent query then
+        // hangs until a full page reload. This fires on token refresh
+        // (~hourly) and tab refocus, which is why the app "sometimes" froze.
+        // Workaround per Supabase docs: defer Supabase work with setTimeout.
+        supabase.auth.onAuthStateChange((_event, session) => {
+          user.value = session?.user ?? null
+          if (session?.user) {
+            setTimeout(() => { void fetchProfile() }, 0)
+          } else {
+            profile.value = null
+          }
+        })
+      } finally {
+        loading.value = false
+      }
+    })()
+    return initPromise
   }
 
   async function login(email: string, password: string) {

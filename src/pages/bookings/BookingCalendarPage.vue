@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
+import { formatTimeRange } from '@/lib/utils/dates'
+import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
+import { getDemandForDate, type DemandTier } from '@/lib/utils/tamilDemand'
 import type { Booking } from '@/types/database'
 
 const router = useRouter()
@@ -43,6 +46,20 @@ const monthName = computed(() =>
   currentMonth.value.toLocaleDateString('en', { month: 'long', year: 'numeric' })
 )
 
+// Tamil demand tier per visible day (memoized in getTamilDate). Only peak/high
+// get a marker on the grid; normal/low are left unmarked to avoid clutter.
+const demandByDay = computed(() => {
+  const m: Record<string, DemandTier> = {}
+  for (const d of calDays.value) {
+    const iso = dayIso(d)
+    const info = getDemandForDate(iso)
+    if (info && (info.demand.tier === 'peak' || info.demand.tier === 'high')) {
+      m[iso] = info.demand.tier
+    }
+  }
+  return m
+})
+
 const selectedBookings = computed(() => dateMap.value[selected.value] ?? [])
 
 const selectedDateLabel = computed(() => {
@@ -80,7 +97,7 @@ async function fetchBookings() {
   try {
     const { data } = await supabase
       .from('bookings')
-      .select('id, function_date, customer_name, status')
+      .select('id, function_date, customer_name, status, start_time, end_time')
       .order('function_date')
     bookings.value = (data as Booking[]) ?? []
   } finally {
@@ -145,6 +162,12 @@ onMounted(fetchBookings)
           >
             <div class="cal-day-num">{{ d.getDate() }}</div>
             <div v-if="dateMap[dayIso(d)]" class="cal-dot"></div>
+            <div
+              v-if="demandByDay[dayIso(d)]"
+              class="cal-demand"
+              :class="'demand-' + demandByDay[dayIso(d)]"
+              :title="demandByDay[dayIso(d)] === 'peak' ? 'Peak Tamil-season demand' : 'High Tamil-season demand'"
+            ></div>
           </div>
         </div>
       </div>
@@ -152,6 +175,7 @@ onMounted(fetchBookings)
       <!-- Day sidebar -->
       <div class="cal-side">
         <div class="t-eyebrow" style="margin-bottom:8px">{{ selectedDateLabel }}</div>
+        <div style="margin-bottom:18px"><TamilDemandBadge :date-str="selected" variant="inline" /></div>
         <h3 class="t-h3" style="margin-bottom:24px">
           {{ selectedBookings.length === 0 ? 'No bookings' : `${selectedBookings.length} booking${selectedBookings.length > 1 ? 's' : ''}` }}
         </h3>
@@ -165,6 +189,9 @@ onMounted(fetchBookings)
           <div class="act-date">{{ b.id.slice(0, 8).toUpperCase() }}</div>
           <div style="flex:1;min-width:0">
             <div class="act-name reveal-line">{{ b.customer_name }}</div>
+            <div v-if="formatTimeRange(b.start_time, b.end_time)" style="font-family:var(--font-mono);font-size:11px;color:var(--ash);margin-top:3px;letter-spacing:0.03em">
+              {{ formatTimeRange(b.start_time, b.end_time) }}
+            </div>
           </div>
           <span :class="['tag', 'tag-' + getStatus(b)]">{{ statusLabels[getStatus(b)] }}</span>
         </div>
@@ -179,3 +206,25 @@ onMounted(fetchBookings)
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Tamil-season demand marker — top-right corner dot on the day cell */
+.cal-demand {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.cal-demand.demand-peak {
+  background: var(--accent, #b5651d);
+  box-shadow: 0 0 0 2px var(--accent-soft, rgba(181,101,29,0.18));
+}
+.cal-demand.demand-high {
+  background: transparent;
+  border: 1.5px solid var(--accent, #b5651d);
+}
+.cal-day.is-selected .cal-demand.demand-peak { background: var(--paper); box-shadow: none; }
+.cal-day.is-selected .cal-demand.demand-high { border-color: var(--paper); }
+</style>

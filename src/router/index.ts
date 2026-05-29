@@ -49,6 +49,22 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/bookings/BookingDetailPage.vue'),
       },
       {
+        path: 'enquiries',
+        name: 'enquiries',
+        component: () => import('@/pages/enquiries/EnquiryListPage.vue'),
+      },
+      {
+        path: 'enquiries/new',
+        name: 'enquiry-create',
+        component: () => import('@/pages/enquiries/EnquiryCreatePage.vue'),
+        meta: { roles: ['admin', 'staff'] as UserRole[] },
+      },
+      {
+        path: 'enquiries/:id',
+        name: 'enquiry-detail',
+        component: () => import('@/pages/enquiries/EnquiryDetailPage.vue'),
+      },
+      {
         path: 'reports',
         name: 'reports',
         component: () => import('@/pages/reports/ReportsPage.vue'),
