@@ -361,6 +361,22 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- ---------- 012 · Default bill amounts + new SMB categories ----------
+ALTER TABLE bill_categories ADD COLUMN IF NOT EXISTS default_amount NUMERIC(12,2);
+INSERT INTO bill_categories (name, is_default, sort_order, default_amount)
+  SELECT 'Guest Rooms', true, 13, 12000
+  WHERE NOT EXISTS (SELECT 1 FROM bill_categories WHERE name = 'Guest Rooms');
+INSERT INTO bill_categories (name, is_default, sort_order, default_amount)
+  SELECT 'Audio', true, 14, 4000
+  WHERE NOT EXISTS (SELECT 1 FROM bill_categories WHERE name = 'Audio');
+INSERT INTO bill_categories (name, is_default, sort_order, default_amount)
+  SELECT 'Additional Kitchen', true, 15, 3000
+  WHERE NOT EXISTS (SELECT 1 FROM bill_categories WHERE name = 'Additional Kitchen');
+UPDATE bill_categories SET default_amount = 12000 WHERE name = 'Guest Rooms'        AND default_amount IS NULL;
+UPDATE bill_categories SET default_amount = 4000  WHERE name = 'Audio'              AND default_amount IS NULL;
+UPDATE bill_categories SET default_amount = 3000  WHERE name = 'Additional Kitchen' AND default_amount IS NULL;
+UPDATE bill_categories SET default_amount = 2000  WHERE name = 'Cleaning'           AND default_amount IS NULL;
+
 -- ---------- 011 · Role caps (2 admin, 5 staff, unlimited viewer) ----------
 CREATE OR REPLACE FUNCTION enforce_role_caps()
 RETURNS TRIGGER AS $$

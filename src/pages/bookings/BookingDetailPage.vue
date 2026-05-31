@@ -59,6 +59,15 @@ const advanceOwed = computed(() => {
   return Math.max(Number(b.expected_advance_amount) - collected, 0)
 })
 
+// Flags a stale/inconsistent forecast — e.g. rent was edited down but
+// expected_advance was left at the old (now larger) value.
+const expectedExceedsBill = computed(() => {
+  const b = booking.value
+  const s = summary.value
+  if (!b || !s || b.expected_advance_amount == null) return false
+  return Number(b.expected_advance_amount) > Number(s.total_bill)
+})
+
 const dueLabelText = computed(() =>
   booking.value?.advance_due_date ? dueLabel(booking.value.advance_due_date) : null
 )
@@ -251,6 +260,10 @@ onMounted(fetchAll)
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
               Invoice
             </button>
+            <button v-if="canEdit && computedStatus !== 'cancelled'" class="btn btn-sm" @click="router.push({ name: 'booking-edit', params: { id: bookingId } })">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              Edit
+            </button>
             <button v-if="canEdit && computedStatus !== 'cancelled'" class="btn btn-sm btn-danger" @click="openCancel">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
               Cancel
@@ -327,6 +340,12 @@ onMounted(fetchAll)
 
           <div v-if="booking?.expected_advance_amount != null" style="margin-top:24px;padding-top:18px;border-top:1px solid var(--hair)">
             <div class="t-eyebrow" style="margin-bottom:12px">Advance Forecast</div>
+            <div
+              v-if="expectedExceedsBill"
+              style="margin-bottom:12px;padding:10px 12px;border:1px solid var(--signal-red);border-radius:6px;background:rgba(192,57,43,0.06);color:var(--signal-red);font-size:12.5px;line-height:1.45"
+            >
+              ⚠ Expected advance ({{ formatCurrency(Number(booking.expected_advance_amount)) }}) exceeds total bill ({{ formatCurrency(summary?.total_bill ?? 0) }}) — likely outdated. Use <strong>Edit forecast</strong> above to fix.
+            </div>
             <div class="fin-row">
               <span class="fin-label">Expected Advance</span>
               <span class="fin-value">{{ formatCurrency(Number(booking.expected_advance_amount)) }}</span>

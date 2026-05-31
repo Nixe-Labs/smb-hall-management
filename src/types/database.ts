@@ -172,6 +172,7 @@ export interface BillCategory {
   is_default: boolean
   is_active: boolean
   sort_order: number
+  default_amount: number | null
   created_at: string
   updated_at: string
 }
