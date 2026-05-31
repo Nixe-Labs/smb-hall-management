@@ -41,6 +41,12 @@ export default defineConfig({
         // The PDF library is a large, lazy-loaded chunk — fetch it on demand
         // instead of bloating the install precache.
         globIgnores: ['**/pdfGenerator-*'],
+        // Take control of every open tab as soon as a new SW activates,
+        // instead of waiting for every tab to close. Without these, a deploy
+        // leaves long-lived tabs running the previous chunk graph — a known
+        // cause of "clicks sometimes do nothing, reload fixes it".
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ],

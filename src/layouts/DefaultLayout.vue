@@ -78,6 +78,20 @@ async function handleSignOut() {
   await authStore.logout()
   router.push({ name: 'login' })
 }
+
+// Centralised navigation: skips no-op pushes (NavigationDuplicated), surfaces
+// real failures in the console, and never lets a rejected push silently
+// swallow a click. Without this, an in-flight navigation getting aborted by a
+// second click would leave the sidebar feeling unresponsive.
+function navTo(name: string) {
+  if (route.name === name) return
+  router.push({ name }).catch(err => {
+    // Aborted navigations are expected (e.g. fast double-click) — don't log.
+    if (err && err.name !== 'NavigationDuplicated' && err.name !== 'NavigationAborted') {
+      console.warn('[nav] push failed:', err)
+    }
+  })
+}
 </script>
 
 <template>
@@ -93,15 +107,16 @@ async function handleSignOut() {
 
       <nav class="sidebar-nav">
         <div class="t-eyebrow" style="padding: 0 16px 12px; color: var(--ash-2)">Workspace</div>
-        <a
+        <button
           v-for="item in navItems"
           :key="item.key"
+          type="button"
           :class="['nav-item', activeRoot === item.key ? 'is-active' : '']"
-          @click="router.push({ name: item.to })"
+          @click="navTo(item.to)"
         >
           <span class="nav-code">{{ item.code }}</span>
           <span class="nav-label">{{ item.label }}</span>
-        </a>
+        </button>
       </nav>
 
       <div class="sidebar-foot">
@@ -139,7 +154,11 @@ async function handleSignOut() {
       <!-- Content -->
       <div class="shell-content">
         <router-view v-slot="{ Component }">
-          <transition name="smb-fade" mode="out-in">
+          <!-- No mode="out-in" — interrupted leaves can strand the UI in the
+               leave-to state, which is exactly the "sometimes clicking does
+               nothing, reload fixes it" symptom. Concurrent enter+leave keeps
+               navigation reliable even with rapid clicks. -->
+          <transition name="smb-fade">
             <component :is="Component" />
           </transition>
         </router-view>
@@ -149,11 +168,12 @@ async function handleSignOut() {
     <!-- Mobile bottom nav -->
     <nav class="smb-mobile-nav">
       <div class="smb-mobile-nav-items">
-        <a
+        <button
           v-for="item in navItems"
           :key="item.key"
+          type="button"
           :class="['smb-mobile-nav-item', activeRoot === item.key ? 'is-active' : '']"
-          @click="router.push({ name: item.to })"
+          @click="navTo(item.to)"
         >
           <!-- Dashboard -->
           <svg v-if="item.key === 'dashboard'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -168,7 +188,7 @@ async function handleSignOut() {
           <!-- Settings -->
           <svg v-else-if="item.key === 'settings'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
           <span>{{ item.label }}</span>
-        </a>
+        </button>
       </div>
     </nav>
   </div>

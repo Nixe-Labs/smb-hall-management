@@ -426,6 +426,14 @@ select.input { cursor: pointer; }
   white-space: nowrap;
   letter-spacing: -0.005em;
   user-select: none;
+  /* button reset (nav-item is rendered as <button>) */
+  background: transparent;
+  border: 0;
+  text-align: left;
+  width: 100%;
+  /* iOS WebKit: ensure tap fires reliably without 300ms delay */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .nav-item:hover { color: var(--ink); background: var(--paper-2); }
 .nav-item.is-active { color: var(--ink); background: var(--paper-2); font-weight: 600; }
@@ -549,6 +557,12 @@ select.input { cursor: pointer; }
   text-transform: uppercase;
   text-decoration: none;
   flex: 1;
+  /* button reset + reliable iOS tap target */
+  background: transparent;
+  border: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  min-height: 44px;
 }
 .smb-mobile-nav-item.is-active { color: var(--ink); }
 .smb-mobile-nav-item svg { flex-shrink: 0; }

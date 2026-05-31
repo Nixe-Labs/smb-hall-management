@@ -122,8 +122,16 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
+  // If initialize() fails (transient network issue, supabase hiccup), the
+  // guard MUST NOT throw — otherwise the navigation rejects and the user
+  // sees a sidebar click that does nothing. Log it and let the auth checks
+  // below decide based on whatever state we have.
   if (authStore.loading) {
-    await authStore.initialize()
+    try {
+      await authStore.initialize()
+    } catch (err) {
+      console.warn('[router] auth initialize failed; continuing with current state', err)
+    }
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {

@@ -39,7 +39,11 @@ export const useAuthStore = defineStore('auth', () => {
         const { data: { session } } = await supabase.auth.getSession()
         user.value = session?.user ?? null
         if (user.value) {
-          await fetchProfile()
+          // Don't let a transient profile fetch failure brick the whole
+          // initialize() — log and continue. The router guard will treat the
+          // user as authenticated (which they are) with viewer role until the
+          // setTimeout fetch below succeeds.
+          try { await fetchProfile() } catch (e) { console.warn('[auth] fetchProfile failed during init', e) }
         }
 
         // IMPORTANT: keep this callback synchronous. Making an async Supabase
@@ -56,6 +60,13 @@ export const useAuthStore = defineStore('auth', () => {
             profile.value = null
           }
         })
+      } catch (err) {
+        // A failed init MUST be retryable — otherwise initPromise stays a
+        // rejected promise forever and every router guard rethrows it, which
+        // is exactly the "click does nothing" symptom we're hunting.
+        console.warn('[auth] initialize failed; will retry on next call', err)
+        initPromise = null
+        throw err
       } finally {
         loading.value = false
       }
