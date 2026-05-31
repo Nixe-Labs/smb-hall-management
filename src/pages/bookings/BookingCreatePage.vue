@@ -13,7 +13,7 @@ import { formatCurrency } from '@/lib/utils/currency'
 import { toISODate } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
 import type { DaySlot, PaymentMethod } from '@/types/enums'
-import type { Booking, BillCategory, Enquiry, EnquiryDate, EnquiryMatch } from '@/types/database'
+import type { Booking, BillCategory, Enquiry, EnquiryDate, EnquiryMatch, BankAccount } from '@/types/database'
 
 const router = useRouter()
 const route = useRoute()
@@ -58,9 +58,23 @@ const form = ref({
 // In Create: this is the booking-time advance (Advance #1).
 // In Edit: this is an additional advance — assigned the next free slot
 // (#1/#2/#3). Bank account left blank; fill on the Advances tab.
-const advanceNow = ref<{ amount: string; method: PaymentMethod }>({
+const advanceNow = ref<{ amount: string; method: PaymentMethod; account_id: string }>({
   amount: '',
   method: 'cash',
+  account_id: '',
+})
+const accounts = ref<BankAccount[]>([])
+async function loadAccounts() {
+  const { data } = await supabase
+    .from('bank_accounts').select('*').eq('is_active', true).order('type').order('name')
+  accounts.value = (data as BankAccount[]) ?? []
+}
+const cashAccountId = computed(() => accounts.value.find(a => a.type === 'cash')?.id ?? '')
+// Default the account when method changes — cash → Cash on hand; other methods
+// stay blank so the user explicitly picks the receiving bank/wallet.
+watch(() => advanceNow.value.method, (m) => {
+  if (m === 'cash') advanceNow.value.account_id = cashAccountId.value
+  else if (advanceNow.value.account_id === cashAccountId.value) advanceNow.value.account_id = ''
 })
 const existingAdvanceNumbers = ref<Set<number>>(new Set())
 const nextAdvanceSlot = computed<number | null>(() => {
@@ -390,7 +404,11 @@ watch(
 onMounted(async () => {
   // Categories must be loaded before edit prefill (to resolve names) or
   // before create prefill (to populate defaults)
-  await loadBillCategories()
+  await Promise.all([loadBillCategories(), loadAccounts()])
+  // Default cash receipts to the Cash on hand account
+  if (advanceNow.value.method === 'cash' && !advanceNow.value.account_id) {
+    advanceNow.value.account_id = cashAccountId.value
+  }
   if (isEditing.value) {
     await loadForEdit(editingId.value!)
   } else {
@@ -404,6 +422,12 @@ function handleSubmit() {
   const r = range.value
   if (!r.function_date || !r.start_date || !r.end_date || !form.value.customer_name || !form.value.rent) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Please fill in dates, customer name, and rent', life: 3000 })
+    return
+  }
+  // If they're recording an advance, the receiving account is required so it
+  // shows up in Treasury. (Cash defaults itself; only non-cash needs a pick.)
+  if (Number(advanceNow.value.amount) > 0 && nextAdvanceSlot.value != null && !advanceNow.value.account_id) {
+    toast.add({ severity: 'warn', summary: 'Pick an account', detail: 'Choose which account the advance landed in — needed for the Treasury balance.', life: 4000 })
     return
   }
   attemptSave()
@@ -520,6 +544,7 @@ async function doSave() {
             amount: advAmountEdit,
             payment_method: advanceNow.value.method,
             payment_date: toISODate(new Date()),
+            deposit_account_id: advanceNow.value.account_id || null,
           })
         }
       }
@@ -551,6 +576,7 @@ async function doSave() {
           amount: advAmount,
           payment_method: advanceNow.value.method,
           payment_date: toISODate(new Date()),
+          deposit_account_id: advanceNow.value.account_id || null,
         })
       }
 
@@ -734,6 +760,14 @@ async function doSave() {
               <option value="online">Online</option>
             </select>
           </div>
+        </div>
+        <div v-if="Number(advanceNow.amount) > 0 && nextAdvanceSlot != null" style="margin-top:12px">
+          <label class="field-label">Received in account *</label>
+          <select class="input" v-model="advanceNow.account_id">
+            <option value="">— Pick where the money landed —</option>
+            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}<span v-if="a.type !== 'bank'"> ({{ a.type }})</span></option>
+          </select>
+          <p style="font-size:11px;color:var(--ash);margin-top:6px">Drives the Treasury balance. Cash defaults to the Cash on hand account; UPI / cheque / bank transfer — pick the receiving account.</p>
         </div>
       </div>
 

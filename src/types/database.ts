@@ -187,14 +187,58 @@ export interface ExpenseCategory {
   updated_at: string
 }
 
+export type AccountType = 'cash' | 'bank' | 'wallet'
+
 export interface BankAccount {
   id: string
   name: string
   account_number: string | null
   bank_name: string | null
+  type: AccountType
   is_active: boolean
   created_at: string
   updated_at: string
+}
+
+export interface AccountTransfer {
+  id: string
+  from_account_id: string
+  to_account_id: string
+  amount: number
+  transfer_date: string
+  source_advance_id: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AccountBalance {
+  account_id: string
+  name: string
+  type: AccountType
+  is_active: boolean
+  inflow_total: number
+  transfers_in_total: number
+  transfers_out_total: number
+  balance: number
+}
+
+export type AccountMovementType = 'inflow' | 'transfer_in' | 'transfer_out'
+
+export interface AccountMovement {
+  movement_id: string
+  source_id: string
+  movement_type: AccountMovementType
+  account_id: string
+  other_account_id: string | null
+  amount: number
+  movement_date: string | null
+  method: string | null
+  booking_id: string | null
+  label: string
+  notes: string | null
+  created_at: string
 }
 
 export type NotificationSeverity = 'info' | 'warning' | 'urgent'

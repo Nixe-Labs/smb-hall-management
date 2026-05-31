@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useToast } from 'primevue/usetoast'
 import { formatCurrency } from '@/lib/utils/currency'
@@ -32,6 +32,18 @@ const editing = ref<AdvanceForm>({})
 const saving = ref(false)
 
 const paymentMethods = ['cash', 'cheque', 'online']
+const cashAccountId = computed(() => props.bankAccounts.find(a => a.type === 'cash')?.id ?? '')
+
+// Default cash receipts to the Cash on hand account; when switching away from
+// cash, clear the auto-set value so the user explicitly picks the bank/wallet.
+watch(() => editing.value.payment_method, (m) => {
+  if (!showModal.value) return
+  if (m === 'cash' && !editing.value.deposit_account_id) {
+    editing.value.deposit_account_id = cashAccountId.value
+  } else if (m !== 'cash' && editing.value.deposit_account_id === cashAccountId.value) {
+    editing.value.deposit_account_id = ''
+  }
+})
 
 function openAdd() {
   const next = (props.advances.length ?? 0) + 1
@@ -39,7 +51,11 @@ function openAdd() {
     toast.add({ severity: 'warn', summary: 'Limit', detail: 'Maximum 3 advance payments allowed', life: 3000 })
     return
   }
-  editing.value = { advance_number: next, payment_method: 'cash' as PaymentMethod }
+  editing.value = {
+    advance_number: next,
+    payment_method: 'cash' as PaymentMethod,
+    deposit_account_id: cashAccountId.value,
+  }
   showModal.value = true
 }
 
@@ -59,6 +75,10 @@ function openEdit(adv: AdvancePayment) {
 async function save() {
   if (!editing.value.amount) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Amount is required', life: 3000 })
+    return
+  }
+  if (!editing.value.deposit_account_id) {
+    toast.add({ severity: 'warn', summary: 'Pick an account', detail: 'Choose which account the payment landed in — needed for the Treasury balance.', life: 4000 })
     return
   }
   saving.value = true
@@ -173,15 +193,12 @@ function accountName(id: string | null): string {
                 <input type="date" class="input" v-model="editing.payment_date" />
               </div>
               <div>
-                <label class="field-label">Deposit Account</label>
+                <label class="field-label">Received in account *</label>
                 <select class="input" v-model="editing.deposit_account_id">
-                  <option value="">— None —</option>
+                  <option value="">— Pick an account —</option>
                   <option v-for="a in bankAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
                 </select>
-              </div>
-              <div>
-                <label class="field-label">Deposit Date</label>
-                <input type="date" class="input" v-model="editing.deposit_date" />
+                <div style="color:var(--ash);font-size:11px;margin-top:6px">Where the money landed — drives the Treasury balance for this account.</div>
               </div>
             </div>
           </div>

@@ -26,7 +26,8 @@ const navItems = [
   { key: 'bookings-calendar',label: 'Calendar',  code: '03', to: 'bookings-calendar' },
   { key: 'enquiries',        label: 'Enquiries', code: '04', to: 'enquiries' },
   { key: 'reports',          label: 'Reports',   code: '05', to: 'reports' },
-  { key: 'settings',         label: 'Settings',  code: '06', to: 'settings' },
+  { key: 'treasury',         label: 'Money',     code: '06', to: 'treasury' },
+  { key: 'settings',         label: 'Settings',  code: '07', to: 'settings' },
 ]
 
 const activeRoot = computed(() => {
@@ -50,6 +51,7 @@ const breadcrumb = computed(() => {
     'enquiry-detail': `Enquiries · ${route.params.id || ''}`,
     'enquiry-create': 'Enquiries · New',
     reports: 'Reports',
+    treasury: 'Money',
     settings: 'Settings',
     'bill-categories': 'Settings · Bill Categories',
     'expense-categories': 'Settings · Expense Categories',

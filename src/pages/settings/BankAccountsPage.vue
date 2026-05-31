@@ -24,8 +24,12 @@ async function fetchAccounts() {
 }
 
 function openAdd() {
-  editingItem.value = { name: '', account_number: '', bank_name: '', is_active: true }
+  editingItem.value = { name: '', account_number: '', bank_name: '', type: 'bank', is_active: true }
   showModal.value = true
+}
+
+function typeLabel(t: BankAccount['type']): string {
+  return t === 'cash' ? 'Cash' : t === 'wallet' ? 'Wallet' : 'Bank'
 }
 
 function openEdit(item: BankAccount) {
@@ -44,6 +48,7 @@ async function save() {
       name: editingItem.value.name,
       account_number: editingItem.value.account_number || null,
       bank_name: editingItem.value.bank_name || null,
+      type: editingItem.value.type ?? 'bank',
       is_active: editingItem.value.is_active ?? true,
     }
     if (editingItem.value.id) {
@@ -113,7 +118,7 @@ onMounted(fetchAccounts)
         :class="['bank-card', !a.is_active ? 'is-retired' : '']"
       >
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <span class="t-mono" style="color:var(--ash);font-size:11px;letter-spacing:.08em">ACCOUNT</span>
+          <span class="t-mono" style="color:var(--ash);font-size:11px;letter-spacing:.08em">{{ typeLabel(a.type).toUpperCase() }}</span>
           <span v-if="!a.is_active" class="pill pill-off">Retired</span>
           <span v-else class="pill pill-on">Active</span>
         </div>
@@ -152,10 +157,18 @@ onMounted(fetchAccounts)
                 <input class="input" v-model="editingItem.name" placeholder="e.g. IOB Current Account" />
               </div>
               <div>
+                <label class="field-label">Type *</label>
+                <select class="input" v-model="editingItem.type">
+                  <option value="cash">Cash (counter / drawer)</option>
+                  <option value="bank">Bank</option>
+                  <option value="wallet">Wallet (PhonePe, GPay merchant, …)</option>
+                </select>
+              </div>
+              <div v-if="editingItem.type !== 'cash'">
                 <label class="field-label">Bank Name</label>
                 <input class="input" v-model="editingItem.bank_name" placeholder="e.g. Indian Overseas Bank" />
               </div>
-              <div>
+              <div v-if="editingItem.type !== 'cash'">
                 <label class="field-label">Account Number</label>
                 <input class="input" v-model="editingItem.account_number" placeholder="Account number" />
               </div>
