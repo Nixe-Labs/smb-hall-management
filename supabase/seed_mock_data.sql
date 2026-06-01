@@ -404,6 +404,17 @@ NOTIFY pgrst, 'reload schema';
 -- SECTION B — Wipe + seed mock data
 -- ============================================================================
 
+-- Ensure the bank accounts the seed references actually exist. Without this,
+-- a fresh DB (or one where someone renamed the seeded accounts) ends up with
+-- NULL deposit_account_id on every seeded advance — silently invisible in
+-- the Treasury balance view. Idempotent: WHERE NOT EXISTS makes re-runs safe.
+INSERT INTO bank_accounts (name, is_active)
+  SELECT 'SMB AC',       true WHERE NOT EXISTS (SELECT 1 FROM bank_accounts WHERE name = 'SMB AC');
+INSERT INTO bank_accounts (name, is_active)
+  SELECT 'Niranjana AC', true WHERE NOT EXISTS (SELECT 1 FROM bank_accounts WHERE name = 'Niranjana AC');
+INSERT INTO bank_accounts (name, is_active)
+  SELECT 'Petty Cash',   true WHERE NOT EXISTS (SELECT 1 FROM bank_accounts WHERE name = 'Petty Cash');
+
 TRUNCATE bookings  CASCADE;  -- cascades to advance_payments, bill_items, expenses, deposits, booking_slots
 TRUNCATE enquiries CASCADE;  -- cascades to enquiry_dates
 

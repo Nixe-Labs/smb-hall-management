@@ -14,6 +14,7 @@ import { toISODate } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
 import type { DaySlot, PaymentMethod } from '@/types/enums'
 import type { Booking, BillCategory, Enquiry, EnquiryDate, EnquiryMatch, BankAccount } from '@/types/database'
+import { diffBillItems, billItemsSubtotal, type FormBillItem } from '@/lib/utils/billItems'
 
 const router = useRouter()
 const route = useRoute()
@@ -85,12 +86,8 @@ const nextAdvanceSlot = computed<number | null>(() => {
 })
 
 // ── Bill items (create + edit) ───────────────────────────────
-interface FormBillItem {
-  category_id: string
-  category_name: string
-  amount: string
-  _existing_id?: string  // bill_items.id when loaded from an existing booking
-}
+// FormBillItem and the diff logic live in @/lib/utils/billItems so the
+// insert/update/delete reconciliation is unit-testable in isolation.
 const billCategories = ref<BillCategory[]>([])
 const billItemsForm = ref<FormBillItem[]>([])
 // Originals loaded from DB on edit, so save-time can diff for delete-removed.
@@ -126,9 +123,7 @@ const availableCategoriesForAdd = computed(() => {
   return billCategories.value.filter(c => !used.has(c.id))
 })
 
-const billItemsTotal = computed(() =>
-  billItemsForm.value.reduce((s, r) => s + (Number(r.amount) || 0), 0)
-)
+const billItemsTotal = computed(() => billItemsSubtotal(billItemsForm.value))
 
 function addBillItemRow(e: Event) {
   const sel = e.target as HTMLSelectElement
@@ -148,38 +143,14 @@ function removeBillItemRow(i: number) {
   billItemsForm.value.splice(i, 1)
 }
 
-/**
- * Reconcile billItemsForm against what's currently in the DB for `bookingId`.
- *   - new rows with amount > 0 → INSERT
- *   - existing rows whose amount changed → UPDATE
- *   - existing rows now at 0/empty, or removed from the form → DELETE
- */
+// Reconcile billItemsForm against what's currently in the DB for `bookingId`.
+// Diff is computed by the pure helper; this function owns only the I/O.
 async function syncBillItems(bookingId: string) {
-  const inserts: { booking_id: string; category_id: string; amount: number }[] = []
-  const updates: { id: string; amount: number }[] = []
-  const deletes: string[] = []
-  const seen = new Set<string>()
-
-  for (const row of billItemsForm.value) {
-    const amount = Number(row.amount) || 0
-    // Non-zero is the "keep" condition — negative is valid for Discount entries.
-    if (row._existing_id) {
-      seen.add(row._existing_id)
-      if (amount !== 0) {
-        const orig = originalBillItems.value.get(row._existing_id)
-        if (orig !== amount) updates.push({ id: row._existing_id, amount })
-      } else {
-        deletes.push(row._existing_id)
-      }
-    } else if (amount !== 0) {
-      inserts.push({ booking_id: bookingId, category_id: row.category_id, amount })
-    }
-  }
-  // Originals removed by the user entirely
-  for (const id of originalBillItems.value.keys()) {
-    if (!seen.has(id)) deletes.push(id)
-  }
-
+  const { inserts, updates, deletes } = diffBillItems(
+    billItemsForm.value,
+    originalBillItems.value,
+    bookingId,
+  )
   if (deletes.length) await supabase.from('bill_items').delete().in('id', deletes)
   for (const u of updates) {
     await supabase.from('bill_items').update({ amount: u.amount }).eq('id', u.id)
@@ -210,6 +181,15 @@ async function loadForEdit(id: string) {
     return
   }
   const b = data as Booking
+  // Cancelled bookings are treated as terminal everywhere else — the Edit
+  // button is hidden on the detail page. Honor that for direct URL access
+  // too, otherwise users could deep-link past the gate and silently edit a
+  // record they'd consider closed.
+  if (b.status === 'cancelled') {
+    toast.add({ severity: 'warn', summary: 'Cancelled', detail: 'Cancelled bookings cannot be edited.', life: 4000 })
+    router.push({ name: 'booking-detail', params: { id } })
+    return
+  }
   range.value = {
     function_date: b.function_date,
     start_date: b.start_date,
@@ -388,10 +368,12 @@ const totalBill = computed(() => (Number(form.value.rent) || 0) + billItemsTotal
 // Catches the "stale forecast" case — e.g. rent was edited from 24L down
 // to 2.4L but Expected Advance still says 20L. Uses the live total bill so
 // expecting >rent is fine when bill items legitimately push the total higher.
-// We do NOT require tb>0 so the case "rent=0 but expected=5K" still warns.
+// We do NOT require tb>0 so the case "rent=0 but expected=5K" still warns;
+// but we clamp totalBill to 0 so heavy-discount edge cases ("expected ₹1K
+// exceeds total -₹5K") read as "exceeds ₹0" instead of confusing the user.
 const expectedExceedsTotal = computed(() => {
   const exp = Number(form.value.expected_advance_amount)
-  return exp > 0 && exp > totalBill.value
+  return exp > 0 && exp > Math.max(0, totalBill.value)
 })
 
 // Reset the "Save anyway" acknowledgement whenever any input that feeds the
@@ -422,6 +404,13 @@ function handleSubmit() {
   const r = range.value
   if (!r.function_date || !r.start_date || !r.end_date || !form.value.customer_name || !form.value.rent) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Please fill in dates, customer name, and rent', life: 3000 })
+    return
+  }
+  // Hall-use times are advisory, not used for math — but inverted times
+  // (end before start) on a same-day booking are almost certainly a typo,
+  // and would render as e.g. "11:00 PM → 10:00 AM" on the bill.
+  if (r.start_time && r.end_time && r.start_date === r.end_date && r.end_time <= r.start_time) {
+    toast.add({ severity: 'warn', summary: 'Check times', detail: 'Hall-use end time must be after the start time.', life: 4000 })
     return
   }
   // If they're recording an advance, the receiving account is required so it

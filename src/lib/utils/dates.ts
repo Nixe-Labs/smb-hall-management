@@ -1,7 +1,7 @@
 import { format, parseISO } from 'date-fns'
 
 export function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
+  if (!dateStr) return '—'
   try {
     return format(parseISO(dateStr), 'dd MMM yyyy')
   } catch {
@@ -10,7 +10,7 @@ export function formatDate(dateStr: string | null): string {
 }
 
 export function formatDateShort(dateStr: string | null): string {
-  if (!dateStr) return '-'
+  if (!dateStr) return '—'
   try {
     return format(parseISO(dateStr), 'dd/MM/yy')
   } catch {

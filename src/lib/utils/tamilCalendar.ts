@@ -91,7 +91,7 @@ export function getTamilDate(dateStr: string | null | undefined): TamilDate | nu
 
 /** Short label e.g. "Vaikasi · Valarpirai". */
 export function tamilDateLabel(t: TamilDate | null): string {
-  if (!t) return ''
+  if (!t) return '—'
   return `${t.month.en} · ${PAKSHA_LABEL[t.paksha].short}`
 }
 

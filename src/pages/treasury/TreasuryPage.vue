@@ -7,6 +7,12 @@ import { useToast } from 'primevue/usetoast'
 import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate, toISODate } from '@/lib/utils/dates'
 import type { BankAccount, AccountBalance, AccountMovement, AccountMovementType, AccountTransfer, AdvancePayment, Booking } from '@/types/database'
+import {
+  buildBookingTrail,
+  trailTotalAmount,
+  distributeByCurrentAccount,
+  type TrailRow,
+} from '@/lib/utils/treasury'
 
 const router = useRouter()
 const toast = useToast()
@@ -213,34 +219,18 @@ function clearBookingSelection() {
   bookingTransfers.value = []
 }
 
-interface TrailRow {
-  advance: AdvancePayment
-  chain: AccountTransfer[]
-  currentAccountId: string | null
-}
-
-const bookingTrail = computed<TrailRow[]>(() => {
-  return bookingAdvances.value
-    .filter(a => Number(a.amount) > 0)
-    .map(a => {
-      const chain = bookingTransfers.value
-        .filter(t => t.source_advance_id === a.id)
-        .sort((x, y) => (x.transfer_date || '').localeCompare(y.transfer_date || '') || x.created_at.localeCompare(y.created_at))
-      const last = chain[chain.length - 1]
-      const currentAccountId = last ? last.to_account_id : a.deposit_account_id
-      return { advance: a, chain, currentAccountId }
-    })
-})
-
-const trailTotal = computed(() => bookingTrail.value.reduce((s, r) => s + Number(r.advance.amount), 0))
-const trailByCurrentAccount = computed(() => {
-  const map = new Map<string, number>()
-  for (const r of bookingTrail.value) {
-    if (!r.currentAccountId) continue
-    map.set(r.currentAccountId, (map.get(r.currentAccountId) ?? 0) + Number(r.advance.amount))
-  }
-  return Array.from(map.entries()).map(([id, amt]) => ({ id, name: accountName(id), amount: amt }))
-})
+// Chain math lives in @/lib/utils/treasury so it can be unit-tested.
+const bookingTrail = computed<TrailRow[]>(() =>
+  buildBookingTrail(bookingAdvances.value, bookingTransfers.value),
+)
+const trailTotal = computed(() => trailTotalAmount(bookingTrail.value))
+const trailByCurrentAccount = computed(() =>
+  distributeByCurrentAccount(bookingTrail.value).map(({ id, amount }) => ({
+    id,
+    name: accountName(id),
+    amount,
+  })),
+)
 
 // ── Per-advance Move modal ──────────────────────────────────
 const showMove = ref(false)
