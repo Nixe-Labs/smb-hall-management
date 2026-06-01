@@ -30,6 +30,11 @@ const navItems = [
   { key: 'settings',         label: 'Settings',  code: '07', to: 'settings' },
 ]
 
+// The mobile bottom bar can fit ~6 items legibly. Settings is admin-only
+// and rarely-used, so it gets dropped from the bottom row and surfaced as
+// a gear icon in the topbar instead (see the mobile-only topbar button).
+const mobileNavItems = computed(() => navItems.filter(i => i.key !== 'settings'))
+
 const activeRoot = computed(() => {
   const name = route.name as string
   if (name === 'booking-detail' || name === 'booking-create') return 'bookings'
@@ -148,6 +153,17 @@ function navTo(name: string) {
             <svg v-if="isDark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3a9 9 0 1 0 9 9c-3 0-9-2-9-9z"/></svg>
           </button>
+          <!-- Mobile-only Settings gear (admin only). Sidebar already has this on desktop;
+               on mobile the Settings item is dropped from the bottom nav for space. -->
+          <button
+            v-if="authStore.role === 'admin'"
+            class="smb-nav-iconbtn smb-topbar-settings"
+            type="button"
+            @click="navTo('settings')"
+            title="Settings"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          </button>
         </div>
       </header>
 
@@ -169,7 +185,7 @@ function navTo(name: string) {
     <nav class="smb-mobile-nav">
       <div class="smb-mobile-nav-items">
         <button
-          v-for="item in navItems"
+          v-for="item in mobileNavItems"
           :key="item.key"
           type="button"
           :class="['smb-mobile-nav-item', activeRoot === item.key ? 'is-active' : '']"
@@ -185,8 +201,8 @@ function navTo(name: string) {
           <svg v-else-if="item.key === 'enquiries'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.33 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           <!-- Reports -->
           <svg v-else-if="item.key === 'reports'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-          <!-- Settings -->
-          <svg v-else-if="item.key === 'settings'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          <!-- Money / Treasury (wallet icon) -->
+          <svg v-else-if="item.key === 'treasury'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h16v6"/><path d="M21 12h-4a2 2 0 0 0 0 4h4"/></svg>
           <span>{{ item.label }}</span>
         </button>
       </div>

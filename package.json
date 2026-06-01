@@ -6,11 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "build:native": "VITE_CAPACITOR=true vue-tsc -b && VITE_CAPACITOR=true vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cap:sync": "npm run build:native && cap sync",
+    "cap:sync:ios": "npm run build:native && cap sync ios",
+    "cap:sync:android": "npm run build:native && cap sync android",
+    "cap:open:ios": "cap open ios",
+    "cap:open:android": "cap open android",
+    "cap:run:ios": "npm run build:native && cap run ios",
+    "cap:run:android": "npm run build:native && cap run android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@primeuix/themes": "^2.0.3",
     "@supabase/supabase-js": "^2.91.1",
     "apexcharts": "^5.3.6",
@@ -25,6 +38,8 @@
     "vue3-apexcharts": "^1.10.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.3.4",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^24.10.1",
     "@types/pdfmake": "^0.2.12",

@@ -8,14 +8,30 @@ import { resolve } from 'path'
 // GitHub Pages (the CI sets BASE_URL). The PWA manifest's `scope` / `start_url`
 // and Workbox's `navigateFallback` MUST line up with this base, or iOS will
 // launch the home-screen icon at the wrong origin path and 404.
-const base = process.env.BASE_URL || '/'
+//
+// For native (Capacitor) builds we force `base = '/'` and skip the PWA plugin
+// entirely. Reasons:
+//   1. Capacitor serves the bundle from capacitor://localhost (iOS) or
+//      https://localhost (Android) — a sub-path base would 404 every asset.
+//   2. The Workbox service worker fights the native shell's own navigation
+//      handling, producing "blank screen on app open" symptoms.
+// Triggered by:  VITE_CAPACITOR=true npm run build  (see package.json scripts)
+const isCapacitorBuild = process.env.VITE_CAPACITOR === 'true'
+const base = isCapacitorBuild ? '/' : (process.env.BASE_URL || '/')
 
 export default defineConfig({
   base,
+  define: {
+    // Expose the flag to the Vue app so the router can pick hash history
+    // for native builds (capacitor:// URLs don't play well with HTML5
+    // history mode).
+    'import.meta.env.VITE_CAPACITOR': JSON.stringify(isCapacitorBuild),
+  },
   plugins: [
     vue(),
     tailwindcss(),
-    VitePWA({
+    // PWA plugin is intentionally skipped for native builds — see comment above.
+    ...(isCapacitorBuild ? [] : [VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
@@ -48,7 +64,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
       },
-    }),
+    })]),
   ],
   resolve: {
     alias: {

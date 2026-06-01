@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/enums'
@@ -114,8 +114,14 @@ const routes: RouteRecordRaw[] = [
   },
 ]
 
+// Web builds use HTML5 history (clean URLs, deep-linkable). Capacitor
+// builds use hash history because the native shell serves from
+// capacitor://localhost / https://localhost, where path-based routing
+// can confuse the web-view and break deep links into the SPA.
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: import.meta.env.VITE_CAPACITOR
+    ? createWebHashHistory()
+    : createWebHistory(import.meta.env.BASE_URL),
   routes,
 })
 
