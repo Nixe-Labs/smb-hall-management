@@ -4,6 +4,9 @@ import type { BookingSummary } from '@/types/finance'
 import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate, formatTimeRange } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
+import { allPhones } from '@/lib/utils/phones'
+import { billItemBreakdown } from '@/lib/utils/billItems'
+import { paymentMethodLabel } from '@/lib/utils/payments'
 import { getTamilDate, PAKSHA_LABEL } from '@/lib/utils/tamilCalendar'
 
 interface InvoiceData {
@@ -21,15 +24,21 @@ function getCategoryName(categoryId: string, categories: BillCategory[]): string
 export function buildInvoiceDocument(data: InvoiceData): TDocumentDefinitions {
   const { booking, advances, billItems, billCategories, summary } = data
 
-  const billItemRows = billItems.map(item => [
-    getCategoryName(item.category_id, billCategories),
-    { text: formatCurrency(item.amount), alignment: 'right' as const },
-  ])
+  const billItemRows = billItems.map(item => {
+    const breakdown = billItemBreakdown(item.unit, item.rate, item.quantity)
+    const label = breakdown
+      ? getCategoryName(item.category_id, billCategories) + `  (${breakdown})`
+      : getCategoryName(item.category_id, billCategories)
+    return [
+      label,
+      { text: formatCurrency(item.amount), alignment: 'right' as const },
+    ]
+  })
 
   const advanceRows = advances.map((adv, i) => [
     `${i + 1}`,
     formatDate(adv.payment_date),
-    adv.payment_method ? adv.payment_method.charAt(0).toUpperCase() + adv.payment_method.slice(1) : '-',
+    adv.payment_method ? paymentMethodLabel(adv.payment_method) : '-',
     { text: formatCurrency(adv.amount), alignment: 'right' as const },
   ])
 
@@ -38,11 +47,16 @@ export function buildInvoiceDocument(data: InvoiceData): TDocumentDefinitions {
     { text: 'Customer Details', bold: true, margin: [0, 0, 0, 5] as [number, number, number, number] },
     { text: `Name: ${booking.customer_name}` },
   ]
-  if (booking.customer_phone) {
-    customerStack.push({ text: `Phone: ${booking.customer_phone}` })
+  const phoneList = allPhones(booking.customer_phone, booking.customer_phones)
+  if (phoneList.length) {
+    customerStack.push({ text: `Phone: ${phoneList.join(', ')}` })
   }
   if (booking.customer_address) {
     customerStack.push({ text: `Address: ${booking.customer_address}` })
+  }
+  if (booking.event_type) {
+    const ev = booking.event_type_other ? `${booking.event_type} (${booking.event_type_other})` : booking.event_type
+    customerStack.push({ text: `Event: ${ev}` })
   }
 
   const functionStack: Content[] = [

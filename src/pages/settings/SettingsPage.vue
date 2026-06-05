@@ -6,8 +6,9 @@ const router = useRouter()
 const items = [
   { label: 'Bill Categories',    desc: 'Manage bill items — Hall Rent, GST, Cleaning, EB charges.', code: '01', route: 'bill-categories' },
   { label: 'Expense Categories', desc: 'Track operational costs — Cleaning, Decoration, Watchman.',  code: '02', route: 'expense-categories' },
-  { label: 'Bank Accounts',      desc: 'Deposit destinations — IOB, Canara, Petty Cash.',           code: '03', route: 'bank-accounts' },
-  { label: 'User Management',    desc: 'Roles and permissions — Admin, Staff, Viewer.',             code: '04', route: 'users' },
+  { label: 'Event Types',        desc: 'Function categories — Wedding Reception, Engagement, Corporate.', code: '03', route: 'event-types' },
+  { label: 'Bank Accounts',      desc: 'Deposit destinations — IOB, Canara, Petty Cash.',           code: '04', route: 'bank-accounts' },
+  { label: 'User Management',    desc: 'Roles and permissions — Admin, Staff, Viewer.',             code: '05', route: 'users' },
 ]
 </script>
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useToast } from 'primevue/usetoast'
 import { formatCurrency } from '@/lib/utils/currency'
+import { billItemBreakdown, unitDef } from '@/lib/utils/billItems'
 import type { BillItem, BillCategory } from '@/types/database'
 
 const props = defineProps<{
@@ -26,6 +27,28 @@ function categoryName(id: string): string {
   return props.categories.find(c => c.id === id)?.name ?? 'Unknown'
 }
 
+function breakdownOf(item: BillItem): string {
+  return billItemBreakdown(item.unit, item.rate, item.quantity)
+}
+
+// The category currently chosen in the modal, and its per-unit shape.
+const editingCategory = computed(() => props.categories.find(c => c.id === editing.value.category_id) ?? null)
+const editingUnit = computed(() => editingCategory.value?.unit ?? null)
+const editingUnitDef = computed(() => unitDef(editingUnit.value))
+const editingLineAmount = computed(() => {
+  if (!editingUnit.value) return Number(editing.value.amount) || 0
+  return (Number(editing.value.rate) || 0) * (Number(editing.value.quantity) || 0)
+})
+
+// When the user picks a different category, seed the rate from its default
+// (per-unit) so they only type the quantity.
+function onCategoryChange() {
+  const cat = editingCategory.value
+  // Seed the rate from the category default; user just enters the quantity.
+  editing.value.rate = cat?.unit ? (cat.default_amount ?? undefined) : undefined
+  editing.value.quantity = undefined
+}
+
 function openAdd() {
   editing.value = { amount: 0, category_id: '' }
   showModal.value = true
@@ -37,8 +60,17 @@ function openEdit(item: BillItem) {
 }
 
 async function save() {
-  if (!editing.value.category_id || !editing.value.amount) {
-    toast.add({ severity: 'warn', summary: 'Required', detail: 'Category and amount are required', life: 3000 })
+  if (!editing.value.category_id) {
+    toast.add({ severity: 'warn', summary: 'Required', detail: 'Category is required', life: 3000 })
+    return
+  }
+  const isUnit = !!editingUnit.value
+  if (isUnit && editingLineAmount.value <= 0) {
+    toast.add({ severity: 'warn', summary: 'Required', detail: `Enter a rate and ${editingUnitDef.value?.qty ?? 'quantity'}`, life: 3000 })
+    return
+  }
+  if (!isUnit && !editing.value.amount) {
+    toast.add({ severity: 'warn', summary: 'Required', detail: 'Amount is required', life: 3000 })
     return
   }
   saving.value = true
@@ -46,7 +78,10 @@ async function save() {
     const payload = {
       booking_id: props.bookingId,
       category_id: editing.value.category_id,
-      amount: editing.value.amount,
+      amount: isUnit ? editingLineAmount.value : editing.value.amount,
+      unit: isUnit ? editingUnit.value : null,
+      rate: isUnit ? (Number(editing.value.rate) || 0) : null,
+      quantity: isUnit ? (Number(editing.value.quantity) || 0) : null,
       notes: editing.value.notes || null,
     }
     if (editing.value.id) {
@@ -108,7 +143,10 @@ const total = () => props.billItems.reduce((s, i) => s + i.amount, 0)
             <td :colspan="(canEdit || canDelete) ? 4 : 3" style="text-align:center;color:var(--ash);padding:40px">No bill items.</td>
           </tr>
           <tr v-for="item in billItems" :key="item.id">
-            <td style="font-weight:600">{{ categoryName(item.category_id) }}</td>
+            <td style="font-weight:600">
+              {{ categoryName(item.category_id) }}
+              <div v-if="breakdownOf(item)" style="font-family:var(--font-mono);font-size:11px;font-weight:400;color:var(--ash);margin-top:2px">{{ breakdownOf(item) }}</div>
+            </td>
             <td style="color:var(--ash)">{{ item.notes ?? '—' }}</td>
             <td style="text-align:right;font-family:var(--font-display);font-weight:600">{{ formatCurrency(item.amount) }}</td>
             <td v-if="canEdit || canDelete" style="text-align:right">
@@ -143,14 +181,28 @@ const total = () => props.billItems.reduce((s, i) => s + i.amount, 0)
             <div class="form-stack">
               <div>
                 <label class="field-label">Category *</label>
-                <select class="input" v-model="editing.category_id">
+                <select class="input" v-model="editing.category_id" @change="onCategoryChange">
                   <option value="">— Select —</option>
-                  <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}<template v-if="c.unit"> ({{ unitDef(c.unit)?.short }})</template></option>
                 </select>
               </div>
-              <div>
+              <!-- Per-unit category → rate × quantity. Flat → single amount. -->
+              <div v-if="editingUnit" class="form-grid-2" style="gap:12px">
+                <div>
+                  <label class="field-label">Rate (₹ {{ editingUnitDef?.short }}) *</label>
+                  <input type="number" class="input" v-model.number="editing.rate" placeholder="0" min="0" />
+                </div>
+                <div>
+                  <label class="field-label">{{ editingUnitDef?.qty || 'Quantity' }} *</label>
+                  <input type="number" class="input" v-model.number="editing.quantity" placeholder="0" min="0" />
+                </div>
+                <div style="grid-column:1 / -1;font-family:var(--font-mono);font-size:12px;color:var(--ash)">
+                  Line total <span style="color:var(--ink);font-weight:600">{{ formatCurrency(editingLineAmount) }}</span>
+                </div>
+              </div>
+              <div v-else>
                 <label class="field-label">Amount (₹) *</label>
-                <input type="number" class="input" v-model.number="editing.amount" placeholder="0" min="0" />
+                <input type="number" class="input" v-model.number="editing.amount" placeholder="0" min="0" step="1000" />
               </div>
               <div>
                 <label class="field-label">Notes</label>

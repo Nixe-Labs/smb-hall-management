@@ -19,6 +19,27 @@ export function defaultDueDate(functionDate: string, leadDays = DEFAULT_ADVANCE_
   return format(subDays(parseISO(functionDate), leadDays), 'yyyy-MM-dd')
 }
 
+/**
+ * "Balance due within N days of booking" rule: today + leadDays, but never
+ * later than the function date — if the event is sooner than N days out, the
+ * balance is due by the function date. functionDate may be blank (date not yet
+ * picked) in which case it's simply today + leadDays.
+ */
+export function dueDateWithin(
+  functionDate: string | null,
+  leadDays = DEFAULT_ADVANCE_LEAD_DAYS,
+  now: Date = new Date(),
+): string {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const target = addDays(today, leadDays)
+  if (functionDate) {
+    const fn = parseISO(functionDate)
+    if (fn < target) return format(fn, 'yyyy-MM-dd')
+  }
+  return format(target, 'yyyy-MM-dd')
+}
+
 export type ForecastBucket = 'overdue' | 'this_week' | 'this_month' | 'this_year' | 'later' | 'paid'
 
 export type BucketMode = 'calendar' | 'rolling'

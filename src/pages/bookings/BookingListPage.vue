@@ -26,15 +26,37 @@ function getStatus(b: Booking): StatusKey {
   return 'upcoming'
 }
 
+// `ongoing` ('Today') is kept for the Status-column tag even though it's no
+// longer a filter pill.
 const statusLabels: Record<string, string> = {
-  all: 'All', ongoing: 'Today', upcoming: 'Upcoming', completed: 'Completed', cancelled: 'Cancelled'
+  all: 'All', this_month: 'This month', next_month: 'Next month',
+  upcoming: 'Upcoming', completed: 'Completed', cancelled: 'Cancelled', ongoing: 'Today'
+}
+
+const filterPills = ['all', 'this_month', 'next_month', 'upcoming', 'completed', 'cancelled']
+
+// True when the function date falls in the calendar month `offset` months from now.
+// offset 0 = this month, 1 = next month (handles year rollover).
+function inMonthOffset(functionDate: string, offset: number): boolean {
+  const d = new Date(functionDate + 'T00:00:00')
+  const now = new Date()
+  const target = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  return d.getFullYear() === target.getFullYear() && d.getMonth() === target.getMonth()
 }
 
 const filtered = computed(() => {
+  const f = statusFilter.value
   return bookings.value.filter(b => {
-    const s = getStatus(b)
-    if (statusFilter.value !== 'all' && s !== statusFilter.value) return false
     if (search.value && !b.customer_name.toLowerCase().includes(search.value.toLowerCase())) return false
+    if (f === 'all') return true
+    if (f === 'cancelled') return b.status === 'cancelled'
+    // Every remaining pill shows active bookings only; cancelled live under their own pill.
+    if (b.status === 'cancelled') return false
+    if (f === 'this_month') return inMonthOffset(b.function_date, 0)
+    if (f === 'next_month') return inMonthOffset(b.function_date, 1)
+    const s = getStatus(b)
+    if (f === 'completed') return s === 'completed'
+    if (f === 'upcoming') return s === 'upcoming' || s === 'ongoing' // today + future
     return true
   })
 })
@@ -45,7 +67,8 @@ async function fetchBookings() {
     const { data } = await supabase
       .from('bookings')
       .select('*')
-      .order('function_date', { ascending: false })
+      .order('function_date', { ascending: true })
+      .order('start_slot', { ascending: true })
     bookings.value = (data as Booking[]) ?? []
     demandHistory.value = buildDemandHistory(
       bookings.value.filter(b => b.status !== 'cancelled').map(b => b.function_date)
@@ -80,7 +103,7 @@ onMounted(fetchBookings)
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button
-          v-for="s in ['all', 'ongoing', 'upcoming', 'completed', 'cancelled']"
+          v-for="s in filterPills"
           :key="s"
           :class="['smb-filter-pill', statusFilter === s ? 'is-active' : '']"
           @click="statusFilter = s"

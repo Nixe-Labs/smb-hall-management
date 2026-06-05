@@ -6,15 +6,18 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'primevue/usetoast'
 import SlotRangePicker from '@/components/booking/SlotRangePicker.vue'
 import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
-import { defaultDueDate } from '@/lib/utils/forecast'
+import PhoneNumbersInput from '@/components/common/PhoneNumbersInput.vue'
+import { mergePhones, splitPhones, validatePhones, telHref, waHref } from '@/lib/utils/phones'
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL } from '@/lib/utils/payments'
+import { dueDateWithin } from '@/lib/utils/forecast'
 import { buildDemandHistory, getDemandForDate, premiumAmount, type DemandHistory } from '@/lib/utils/tamilDemand'
 import { PAKSHA_LABEL } from '@/lib/utils/tamilCalendar'
 import { formatCurrency } from '@/lib/utils/currency'
 import { toISODate } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
 import type { DaySlot, PaymentMethod } from '@/types/enums'
-import type { Booking, BillCategory, Enquiry, EnquiryDate, EnquiryMatch, BankAccount } from '@/types/database'
-import { diffBillItems, billItemsSubtotal, type FormBillItem } from '@/lib/utils/billItems'
+import type { Booking, BillCategory, Enquiry, EnquiryDate, EnquiryMatch, BankAccount, EventType } from '@/types/database'
+import { diffBillItems, billItemsSubtotal, resolveBillItem, unitDef, type FormBillItem, type BillItemSnapshot } from '@/lib/utils/billItems'
 
 const router = useRouter()
 const route = useRoute()
@@ -47,22 +50,40 @@ const range = ref<{
 
 const form = ref({
   customer_name: '',
-  customer_phone: '',
   customer_address: '',
+  event_type: '',
+  event_type_other: '',
   rent: '',
   notes: '',
   expected_advance_amount: '',
   advance_due_date: '',
 })
 
+// Event types come from the admin-managed catalogue (Settings → Event Types).
+const eventTypes = ref<EventType[]>([])
+async function loadEventTypes() {
+  const { data } = await supabase
+    .from('event_types').select('*').eq('is_active', true).order('sort_order')
+  eventTypes.value = (data as EventType[]) ?? []
+}
+// Does the chosen type want a free-text detail (the "Others" case)?
+const eventTypeIsOther = computed(() =>
+  eventTypes.value.find(t => t.name === form.value.event_type)?.is_other ?? false
+)
+
+// Contact numbers — index 0 is the primary (required). Extras (up to 4 more)
+// are stored separately in bookings.customer_phones. Always ≥1 row.
+const phones = ref<string[]>([''])
+
 // ── Advance received now (shown in both modes) ───────────────
 // In Create: this is the booking-time advance (Advance #1).
 // In Edit: this is an additional advance — assigned the next free slot
 // (#1/#2/#3). Bank account left blank; fill on the Advances tab.
-const advanceNow = ref<{ amount: string; method: PaymentMethod; account_id: string }>({
+const advanceNow = ref<{ amount: string; method: PaymentMethod; account_id: string; date: string }>({
   amount: '',
   method: 'cash',
   account_id: '',
+  date: toISODate(new Date()),
 })
 const accounts = ref<BankAccount[]>([])
 async function loadAccounts() {
@@ -91,7 +112,7 @@ const nextAdvanceSlot = computed<number | null>(() => {
 const billCategories = ref<BillCategory[]>([])
 const billItemsForm = ref<FormBillItem[]>([])
 // Originals loaded from DB on edit, so save-time can diff for delete-removed.
-const originalBillItems = ref<Map<string, number>>(new Map())
+const originalBillItems = ref<Map<string, BillItemSnapshot>>(new Map())
 
 async function loadBillCategories() {
   const { data } = await supabase
@@ -100,22 +121,39 @@ async function loadBillCategories() {
 }
 
 function prefillDefaultBillItems() {
+  // The fixed standard table: every active category that has a default
+  // amount/rate configured (Settings → Bill Categories) auto-fills on every new
+  // booking, so staff never re-add the standard items by hand. Flat categories
+  // prefill their amount; per-unit categories (AC, etc.) prefill the rate with a
+  // blank quantity — present in the table, but only billed once the hours/units
+  // are entered (so they're never wrongly charged as a flat amount).
   billItemsForm.value = billCategories.value
     .filter(c => c.default_amount != null && Number(c.default_amount) > 0)
-    .map(c => ({ category_id: c.id, category_name: c.name, amount: String(c.default_amount) }))
+    .map(c => c.unit
+      ? { category_id: c.id, category_name: c.name, amount: '0', unit: c.unit, rate: String(c.default_amount), quantity: '' }
+      : { category_id: c.id, category_name: c.name, amount: String(c.default_amount) }
+    )
 }
 
 async function loadBillItemsForBooking(bookingId: string) {
   const { data } = await supabase
-    .from('bill_items').select('id, category_id, amount').eq('booking_id', bookingId)
-  const rows = (data as { id: string; category_id: string; amount: number }[]) ?? []
+    .from('bill_items').select('id, category_id, amount, unit, rate, quantity').eq('booking_id', bookingId)
+  const rows = (data as { id: string; category_id: string; amount: number; unit: string | null; rate: number | null; quantity: number | null }[]) ?? []
   billItemsForm.value = rows.map(r => ({
     category_id: r.category_id,
     category_name: billCategories.value.find(c => c.id === r.category_id)?.name ?? 'Unknown',
     amount: String(r.amount),
+    unit: r.unit,
+    rate: r.rate != null ? String(r.rate) : '',
+    quantity: r.quantity != null ? String(r.quantity) : '',
     _existing_id: r.id,
   }))
-  originalBillItems.value = new Map(rows.map(r => [r.id, Number(r.amount)]))
+  originalBillItems.value = new Map(rows.map(r => [r.id, {
+    amount: Number(r.amount),
+    unit: r.unit ?? null,
+    rate: r.rate != null ? Number(r.rate) : null,
+    quantity: r.quantity != null ? Number(r.quantity) : null,
+  }]))
 }
 
 const availableCategoriesForAdd = computed(() => {
@@ -131,16 +169,40 @@ function addBillItemRow(e: Event) {
   if (!id) return
   const cat = billCategories.value.find(c => c.id === id)
   if (!cat) return
-  billItemsForm.value.push({
-    category_id: cat.id,
-    category_name: cat.name,
-    amount: cat.default_amount != null ? String(cat.default_amount) : '0',
-  })
+  if (cat.unit) {
+    // Per-unit: seed the rate from the category default, leave quantity blank
+    // so the user must enter the hours/units before it counts.
+    billItemsForm.value.push({
+      category_id: cat.id,
+      category_name: cat.name,
+      amount: '0',
+      unit: cat.unit,
+      rate: cat.default_amount != null ? String(cat.default_amount) : '',
+      quantity: '',
+    })
+  } else {
+    billItemsForm.value.push({
+      category_id: cat.id,
+      category_name: cat.name,
+      amount: cat.default_amount != null ? String(cat.default_amount) : '0',
+    })
+  }
   sel.value = ''  // reset dropdown
 }
 
 function removeBillItemRow(i: number) {
   billItemsForm.value.splice(i, 1)
+}
+
+// Live line total for a per-unit row (rate × quantity), for display.
+function lineTotal(item: FormBillItem): number {
+  return resolveBillItem(item).amount
+}
+function unitShort(unit: string | null | undefined): string {
+  return unitDef(unit)?.short ?? ''
+}
+function unitQtyLabel(unit: string | null | undefined): string {
+  return unitDef(unit)?.qty ?? 'qty'
 }
 
 // Reconcile billItemsForm against what's currently in the DB for `bookingId`.
@@ -158,19 +220,34 @@ async function syncBillItems(bookingId: string) {
   if (inserts.length) await supabase.from('bill_items').insert(inserts)
 }
 
-// User's manual edits to advance_due_date win — only auto-default while it's blank.
+// Due date rule (owner): the balance is expected "within 30 days" of booking
+// → today + 30, capped at the function date if the event is sooner. The user's
+// manual edits win; while untouched we keep it in sync with the function date.
 let dueDateTouched = false
 watch(
   () => range.value.function_date,
   (next) => {
-    if (next && !dueDateTouched && !form.value.advance_due_date) {
-      form.value.advance_due_date = defaultDueDate(next)
+    if (!dueDateTouched && !isEditing.value) {
+      form.value.advance_due_date = dueDateWithin(next || null)
     }
   }
 )
 function onDueDateInput(e: Event) {
   dueDateTouched = true
   form.value.advance_due_date = (e.target as HTMLInputElement).value
+}
+
+// ── Expected advance = balance after the first advance ───────
+// Owner's rule: Expected advance auto-fills to (total bill − first advance),
+// i.e. the outstanding balance, and stays in sync until the user overrides it.
+// Create-mode only — in edit mode `advanceNow` is an *additional* advance, so
+// we leave the stored forecast untouched.
+let expectedTouched = false
+const firstAdvanceAmount = computed(() => Number(advanceNow.value.amount) || 0)
+const suggestedExpected = computed(() => Math.max(0, totalBill.value - firstAdvanceAmount.value))
+function onExpectedInput(e: Event) {
+  expectedTouched = true
+  form.value.expected_advance_amount = (e.target as HTMLInputElement).value
 }
 
 async function loadForEdit(id: string) {
@@ -201,15 +278,19 @@ async function loadForEdit(id: string) {
   }
   form.value = {
     customer_name: b.customer_name,
-    customer_phone: b.customer_phone ?? '',
     customer_address: b.customer_address ?? '',
+    event_type: b.event_type ?? '',
+    event_type_other: b.event_type_other ?? '',
     rent: b.rent != null ? String(b.rent) : '',
     notes: b.notes ?? '',
     expected_advance_amount: b.expected_advance_amount != null ? String(b.expected_advance_amount) : '',
     advance_due_date: b.advance_due_date ?? '',
   }
-  // Keep the existing due-date; don't let the function-date watcher auto-default it.
+  phones.value = mergePhones(b.customer_phone, b.customer_phones)
+  // Keep the existing due-date + forecast on edit; don't let the auto-fill
+  // watchers overwrite values that were already saved on this booking.
   dueDateTouched = true
+  expectedTouched = true
   // Snapshot the loaded range so the conflict-popup can suppress when unchanged
   originalRange.value = { ...range.value }
   // Pull this booking's existing bill items into the edit form
@@ -232,8 +313,10 @@ async function prefillFromEnquiry(id: string) {
   const dateList = (dates as EnquiryDate[]) ?? []
   const primary = dateList.find(d => d.is_primary) ?? dateList[0]
   form.value.customer_name = enquiry.customer_name
-  form.value.customer_phone = enquiry.customer_phone ?? ''
+  phones.value = mergePhones(enquiry.customer_phone, enquiry.customer_phones)
   form.value.customer_address = enquiry.customer_address ?? ''
+  form.value.event_type = enquiry.event_type ?? ''
+  form.value.event_type_other = enquiry.event_type_other ?? ''
   if (enquiry.notes) form.value.notes = enquiry.notes
   if (primary) {
     range.value = {
@@ -342,18 +425,6 @@ watch(
   }
 )
 
-function telHref(phone: string | null): string | null {
-  if (!phone) return null
-  const c = phone.replace(/[^\d+]/g, '')
-  return c ? `tel:${c}` : null
-}
-function waHref(phone: string | null): string | null {
-  if (!phone) return null
-  let d = phone.replace(/\D/g, '')
-  if (d.length === 10) d = '91' + d
-  return d ? `https://wa.me/${d}` : null
-}
-
 // ── Save pipeline with chained confirmations ─────────────────
 const showUnderpriced = ref(false)
 const showConflict = ref(false)
@@ -383,10 +454,22 @@ watch(
   () => { expectedConfirmed.value = false }
 )
 
+// Auto-fill Expected advance with the balance (total bill − first advance) as
+// the rent / bill items / first advance change. Only while the user hasn't
+// overridden it, and never in edit mode. Stays blank until a rent is entered.
+watch(
+  () => [totalBill.value, firstAdvanceAmount.value],
+  () => {
+    if (isEditing.value || expectedTouched) return
+    if (!(Number(form.value.rent) > 0)) { form.value.expected_advance_amount = ''; return }
+    form.value.expected_advance_amount = suggestedExpected.value > 0 ? String(suggestedExpected.value) : ''
+  }
+)
+
 onMounted(async () => {
   // Categories must be loaded before edit prefill (to resolve names) or
   // before create prefill (to populate defaults)
-  await Promise.all([loadBillCategories(), loadAccounts()])
+  await Promise.all([loadBillCategories(), loadAccounts(), loadEventTypes()])
   // Default cash receipts to the Cash on hand account
   if (advanceNow.value.method === 'cash' && !advanceNow.value.account_id) {
     advanceNow.value.account_id = cashAccountId.value
@@ -396,6 +479,8 @@ onMounted(async () => {
   } else {
     if (fromEnquiryId) await prefillFromEnquiry(fromEnquiryId)
     prefillDefaultBillItems()
+    // Seed the "within 30 days" due date even before a function date is picked.
+    if (!dueDateTouched) form.value.advance_due_date = dueDateWithin(range.value.function_date || null)
   }
   loadDemandHistory()
 })
@@ -404,6 +489,11 @@ function handleSubmit() {
   const r = range.value
   if (!r.function_date || !r.start_date || !r.end_date || !form.value.customer_name || !form.value.rent) {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Please fill in dates, customer name, and rent', life: 3000 })
+    return
+  }
+  const phoneError = validatePhones(phones.value, { requireFirst: true })
+  if (phoneError) {
+    toast.add({ severity: 'warn', summary: 'Check mobile numbers', detail: phoneError, life: 4000 })
     return
   }
   // Hall-use times are advisory, not used for math — but inverted times
@@ -492,6 +582,7 @@ async function doSave() {
 
   loading.value = true
   try {
+    const { primary: primaryPhone, extras: extraPhones } = splitPhones(phones.value)
     const payload = {
       function_date: r.function_date,
       start_date: r.start_date,
@@ -501,8 +592,11 @@ async function doSave() {
       start_time: r.start_time || null,
       end_time: r.end_time || null,
       customer_name: form.value.customer_name,
-      customer_phone: form.value.customer_phone || null,
+      customer_phone: primaryPhone,
+      customer_phones: extraPhones,
       customer_address: form.value.customer_address || null,
+      event_type: form.value.event_type || null,
+      event_type_other: eventTypeIsOther.value ? (form.value.event_type_other || null) : null,
       rent: Number(form.value.rent),
       notes: form.value.notes || null,
       expected_advance_amount: form.value.expected_advance_amount ? Number(form.value.expected_advance_amount) : null,
@@ -532,7 +626,7 @@ async function doSave() {
             advance_number: nextAdvanceSlot.value,
             amount: advAmountEdit,
             payment_method: advanceNow.value.method,
-            payment_date: toISODate(new Date()),
+            payment_date: advanceNow.value.date || toISODate(new Date()),
             deposit_account_id: advanceNow.value.account_id || null,
           })
         }
@@ -564,7 +658,7 @@ async function doSave() {
           advance_number: nextAdvanceSlot.value ?? 1,
           amount: advAmount,
           payment_method: advanceNow.value.method,
-          payment_date: toISODate(new Date()),
+          payment_date: advanceNow.value.date || toISODate(new Date()),
           deposit_account_id: advanceNow.value.account_id || null,
         })
       }
@@ -612,7 +706,9 @@ async function doSave() {
       </p>
     </div>
 
-    <form class="form-stack fade-up delay-2" @submit.prevent="handleSubmit">
+    <!-- novalidate: bill amounts use a 1000 step but exact values (e.g. EB ₹25)
+         must still save — validation is handled in handleSubmit via toasts. -->
+    <form class="form-stack fade-up delay-2" @submit.prevent="handleSubmit" novalidate>
       <SlotRangePicker v-model="range" :show-times="true" />
 
       <!-- Live flag: enquiries that wanted this date -->
@@ -626,14 +722,22 @@ async function doSave() {
         {{ matchingEnquiries.length }} {{ matchingEnquiries.length === 1 ? 'enquiry' : 'enquiries' }} wanted this date — view
       </button>
 
+      <div>
+        <label class="field-label">Customer Name *</label>
+        <input class="input" v-model="form.customer_name" placeholder="Full name" required />
+      </div>
+      <PhoneNumbersInput v-model="phones" :require-first="true" />
       <div class="form-grid-2">
         <div>
-          <label class="field-label">Customer Name *</label>
-          <input class="input" v-model="form.customer_name" placeholder="Full name" required />
+          <label class="field-label">Type of event</label>
+          <select class="input" v-model="form.event_type">
+            <option value="">— Select —</option>
+            <option v-for="t in eventTypes" :key="t.id" :value="t.name">{{ t.name }}</option>
+          </select>
         </div>
-        <div>
-          <label class="field-label">Phone</label>
-          <input class="input" v-model="form.customer_phone" placeholder="+91 …" />
+        <div v-if="eventTypeIsOther">
+          <label class="field-label">Specify event</label>
+          <input class="input" v-model="form.event_type_other" placeholder="e.g. Birthday, Temple function" />
         </div>
       </div>
       <div>
@@ -683,17 +787,38 @@ async function doSave() {
         <div v-if="billItemsForm.length === 0" style="font-size:12px;color:var(--ash);margin-bottom:8px">
           No bill items yet — add one below if you want to bill extras alongside the rent.
         </div>
-        <div v-for="(item, i) in billItemsForm" :key="item._existing_id ?? item.category_id" class="bill-row">
-          <div class="bill-row-label">{{ item.category_name }}</div>
-          <input type="number" class="input bill-row-input" v-model="item.amount" placeholder="0" />
-          <button type="button" class="smb-nav-iconbtn" @click="removeBillItemRow(i)" :title="`Remove ${item.category_name}`">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
-          </button>
-        </div>
+        <!-- Flat row: a single amount. Per-unit row: rate × quantity = total. -->
+        <template v-for="(item, i) in billItemsForm" :key="item._existing_id ?? item.category_id">
+          <div v-if="!item.unit" class="bill-row">
+            <div class="bill-row-label">{{ item.category_name }}</div>
+            <input type="number" class="input bill-row-input" v-model="item.amount" placeholder="0" step="1000" min="0" />
+            <button type="button" class="smb-nav-iconbtn" @click="removeBillItemRow(i)" :title="`Remove ${item.category_name}`">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+            </button>
+          </div>
+          <div v-else class="bill-row bill-row-unit">
+            <div class="bill-row-label">
+              {{ item.category_name }}
+              <span class="bill-unit-tag">{{ unitShort(item.unit) }}</span>
+            </div>
+            <div class="bill-unit-calc">
+              <span class="bill-unit-cur">₹</span>
+              <input type="number" class="input bill-unit-input" v-model="item.rate" placeholder="rate" min="0" :title="`Rate ${unitShort(item.unit)}`" />
+              <span class="bill-unit-x">×</span>
+              <input type="number" class="input bill-unit-input" v-model="item.quantity" :placeholder="unitQtyLabel(item.unit)" min="0" :title="unitQtyLabel(item.unit)" />
+              <span class="bill-unit-eq">= {{ formatCurrency(lineTotal(item)) }}</span>
+            </div>
+            <button type="button" class="smb-nav-iconbtn" @click="removeBillItemRow(i)" :title="`Remove ${item.category_name}`">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+            </button>
+          </div>
+        </template>
         <div v-if="availableCategoriesForAdd.length" style="margin-top:8px">
           <select class="input" :value="''" @change="addBillItemRow">
             <option value="">+ Add bill item …</option>
-            <option v-for="c in availableCategoriesForAdd" :key="c.id" :value="c.id">{{ c.name }}</option>
+            <option v-for="c in availableCategoriesForAdd" :key="c.id" :value="c.id">
+              {{ c.name }}<template v-if="c.unit"> ({{ c.default_amount != null ? formatCurrency(Number(c.default_amount)) : '' }}{{ unitShort(c.unit) }})</template>
+            </option>
           </select>
         </div>
       </div>
@@ -703,7 +828,10 @@ async function doSave() {
         <div class="form-grid-2">
           <div>
             <label class="field-label">Expected advance (₹)</label>
-            <input type="number" class="input" v-model="form.expected_advance_amount" placeholder="e.g. 50000" min="0" />
+            <input type="number" class="input" :value="form.expected_advance_amount" @input="onExpectedInput" placeholder="e.g. 50000" min="0" />
+            <p v-if="!isEditing" style="margin-top:6px;font-size:12px;color:var(--ash)">
+              Auto-set to the balance — total bill {{ formatCurrency(totalBill) }} − first advance {{ formatCurrency(firstAdvanceAmount) }} = <strong style="color:var(--ink)">{{ formatCurrency(suggestedExpected) }}</strong>. Edit to override.
+            </p>
             <p v-if="expectedExceedsTotal" style="margin-top:6px;font-size:12px;color:var(--signal-red,#c0392b)">
               Greater than total bill ({{ formatCurrency(Number(form.expected_advance_amount)) }} &gt; {{ formatCurrency(totalBill) }}) — likely a leftover from the previous rent / bill items.
             </p>
@@ -712,7 +840,7 @@ async function doSave() {
             <label class="field-label">Advance due by</label>
             <input type="date" class="input" :value="form.advance_due_date" @input="onDueDateInput" />
             <p style="margin-top:6px;font-size:12px;color:var(--ash)">
-              Defaults to 30 days before the function date.
+              Defaults to 30 days from today (or the function date if that's sooner).
             </p>
           </div>
         </div>
@@ -721,7 +849,7 @@ async function doSave() {
       <!-- Advance received now (Create: #1; Edit: next free slot) -->
       <div style="border-top:1px solid var(--hair);padding-top:18px">
         <div class="t-eyebrow" style="margin-bottom:12px">
-          {{ isEditing ? 'Record an advance payment (optional)' : 'Advance received at booking (optional)' }}
+          {{ isEditing ? 'Record an advance payment (optional)' : 'First advance — received at booking (optional)' }}
         </div>
         <p v-if="nextAdvanceSlot != null" style="font-size:12px;color:var(--ash);margin:-4px 0 12px">
           <template v-if="isEditing">
@@ -744,10 +872,15 @@ async function doSave() {
           <div>
             <label class="field-label">Payment method</label>
             <select class="input" v-model="advanceNow.method" :disabled="nextAdvanceSlot == null">
-              <option value="cash">Cash</option>
-              <option value="cheque">Cheque</option>
-              <option value="online">Online</option>
+              <option v-for="m in PAYMENT_METHODS" :key="m" :value="m">{{ PAYMENT_METHOD_LABEL[m] }}</option>
             </select>
+          </div>
+        </div>
+        <div v-if="nextAdvanceSlot != null" class="form-grid-2" style="margin-top:12px">
+          <div>
+            <label class="field-label">Advance date</label>
+            <input type="date" class="input" v-model="advanceNow.date" />
+            <p style="font-size:11px;color:var(--ash);margin-top:6px">When the advance was actually received. Defaults to today.</p>
           </div>
         </div>
         <div v-if="Number(advanceNow.amount) > 0 && nextAdvanceSlot != null" style="margin-top:12px">
@@ -935,8 +1068,43 @@ async function doSave() {
 }
 .bill-row-input { padding: 8px 10px; text-align: right; }
 
+/* Per-unit row reuses the flat-row grid (label · inputs · remove) but lets the
+   middle column auto-size to the rate×qty cluster. Because the remove column is
+   fixed, the cluster's right edge and the × button line up exactly with the
+   flat amount boxes above/below. */
+.bill-row-unit {
+  grid-template-columns: 1fr auto 42px;
+}
+.bill-unit-tag {
+  margin-left: 6px;
+  font: 500 10.5px/1 var(--font-mono, monospace);
+  color: var(--accent-ink, #b5651d);
+  letter-spacing: 0.02em;
+}
+.bill-unit-calc {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.bill-unit-cur { color: var(--ash); font-size: 13px; }
+.bill-unit-input { width: 76px; padding: 8px 10px; text-align: right; }
+.bill-unit-x, .bill-unit-eq { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--ash); white-space: nowrap; }
+.bill-unit-eq { color: var(--ink); font-weight: 600; min-width: 84px; text-align: right; }
+
 @media (max-width: 520px) {
   .bill-row { grid-template-columns: 1fr 110px 38px; gap: 8px; }
   .bill-row-label { font-size: 12.5px; }
+  /* Stack on narrow screens: label + × on top, the rate×qty cluster below. */
+  .bill-row-unit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+  }
+  .bill-row-unit .bill-row-label { flex: 1 1 auto; order: 1; }
+  .bill-row-unit > .smb-nav-iconbtn { order: 2; }
+  .bill-row-unit .bill-unit-calc { order: 3; flex: 1 1 100%; margin-top: 6px; }
+  .bill-unit-input { width: 64px; }
 }
 </style>

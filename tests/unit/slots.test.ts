@@ -15,6 +15,10 @@ describe('compareSlots', () => {
   it('orders morning before evening on same day', () => {
     expect(compareSlots({ date: '2026-05-01', slot: 'morning' }, { date: '2026-05-01', slot: 'evening' })).toBeLessThan(0)
   })
+  it('orders morning < afternoon < evening', () => {
+    expect(compareSlots({ date: '2026-05-01', slot: 'morning' }, { date: '2026-05-01', slot: 'afternoon' })).toBeLessThan(0)
+    expect(compareSlots({ date: '2026-05-01', slot: 'afternoon' }, { date: '2026-05-01', slot: 'evening' })).toBeLessThan(0)
+  })
   it('returns 0 for identical slot', () => {
     expect(compareSlots({ date: '2026-05-01', slot: 'morning' }, { date: '2026-05-01', slot: 'morning' })).toBe(0)
   })
@@ -26,13 +30,25 @@ describe('expandSlots', () => {
       { date: '2026-05-01', slot: 'morning' },
     ])
   })
-  it('full single day yields morning + evening', () => {
+  it('afternoon-only range yields one slot', () => {
+    expect(expandSlots('2026-05-01', 'afternoon', '2026-05-01', 'afternoon')).toEqual([
+      { date: '2026-05-01', slot: 'afternoon' },
+    ])
+  })
+  it('full single day yields morning + afternoon + evening', () => {
     expect(expandSlots('2026-05-01', 'morning', '2026-05-01', 'evening')).toEqual([
       { date: '2026-05-01', slot: 'morning' },
+      { date: '2026-05-01', slot: 'afternoon' },
       { date: '2026-05-01', slot: 'evening' },
     ])
   })
-  it('cross-day range includes all intermediate slots', () => {
+  it('morning→afternoon yields the two leading slots (no evening)', () => {
+    expect(expandSlots('2026-05-01', 'morning', '2026-05-01', 'afternoon')).toEqual([
+      { date: '2026-05-01', slot: 'morning' },
+      { date: '2026-05-01', slot: 'afternoon' },
+    ])
+  })
+  it('cross-day evening→morning skips the afternoon of both days', () => {
     const out = expandSlots('2026-05-01', 'evening', '2026-05-02', 'morning')
     expect(out).toEqual([
       { date: '2026-05-01', slot: 'evening' },
@@ -45,9 +61,9 @@ describe('expandSlots', () => {
   it('returns empty when start = end but slot ordering inverted', () => {
     expect(expandSlots('2026-05-01', 'evening', '2026-05-01', 'morning')).toEqual([])
   })
-  it('two-day full block yields 4 slots', () => {
+  it('two-day full block yields 6 slots', () => {
     const out = expandSlots('2026-05-01', 'morning', '2026-05-02', 'evening')
-    expect(out).toHaveLength(4)
+    expect(out).toHaveLength(6)
   })
 })
 
@@ -78,11 +94,14 @@ describe('formatRange', () => {
 })
 
 describe('slotCount', () => {
-  it('full day = 2 slots', () => {
-    expect(slotCount({ start_date: '2026-05-01', start_slot: 'morning', end_date: '2026-05-01', end_slot: 'evening' })).toBe(2)
+  it('full day = 3 slots', () => {
+    expect(slotCount({ start_date: '2026-05-01', start_slot: 'morning', end_date: '2026-05-01', end_slot: 'evening' })).toBe(3)
   })
-  it('three-day morn→eve = 6 slots', () => {
-    expect(slotCount({ start_date: '2026-05-01', start_slot: 'morning', end_date: '2026-05-03', end_slot: 'evening' })).toBe(6)
+  it('afternoon only = 1 slot', () => {
+    expect(slotCount({ start_date: '2026-05-01', start_slot: 'afternoon', end_date: '2026-05-01', end_slot: 'afternoon' })).toBe(1)
+  })
+  it('three-day morn→eve = 9 slots', () => {
+    expect(slotCount({ start_date: '2026-05-01', start_slot: 'morning', end_date: '2026-05-03', end_slot: 'evening' })).toBe(9)
   })
 })
 

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { addDays, format, parseISO } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import type { DaySlot } from '@/types/enums'
-import { SLOT_LABEL, compareSlots, slotCount } from '@/lib/utils/slots'
+import { SLOT_LABEL, DAY_SLOTS, compareSlots, slotCount } from '@/lib/utils/slots'
 
 interface SlotRangeValue {
   function_date: string
@@ -27,9 +27,18 @@ const props = withDefaults(defineProps<{
   showTimes: false,
 })
 
-// <input type="time"> wants "HH:MM"; Postgres TIME may come back as "HH:MM:SS"
-function timeInputValue(t: string | null | undefined): string {
-  return t ? t.slice(0, 5) : ''
+// Hall-use times are tracked by the hour only (no minutes). Options are the 24
+// whole hours, stored as "HH:00" and shown in 12-hour AM/PM form.
+const hourOptions = Array.from({ length: 24 }, (_, h) => {
+  const period = h < 12 ? 'AM' : 'PM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return { value: `${String(h).padStart(2, '0')}:00`, label: `${h12}:00 ${period}` }
+})
+
+// Normalise any stored time (e.g. legacy "12:30" or "09:00:00") to its whole
+// hour so the dropdown can match it.
+function hourValue(t: string | null | undefined): string {
+  return t ? `${t.slice(0, 2)}:00` : ''
 }
 
 type Availability =
@@ -46,17 +55,27 @@ function shiftDate(dateStr: string, days: number): string {
   return format(addDays(parseISO(dateStr), days), 'yyyy-MM-dd')
 }
 
-function applyPreset(kind: 'full' | 'eve-morn' | 'morn-morn' | 'eve-eve') {
+type PresetKind =
+  | 'morn-only' | 'aftn-only' | 'eve-only' | 'full'   // single day
+  | 'eve-morn' | 'morn-morn' | 'eve-eve'              // multi-day (spans into the function date)
+
+function applyPreset(kind: PresetKind) {
   const f = model.value.function_date
   if (!f) return
-  if (kind === 'full') {
-    model.value = { ...model.value, start_date: f, start_slot: 'morning', end_date: f, end_slot: 'evening' }
-  } else if (kind === 'eve-morn') {
-    model.value = { ...model.value, start_date: shiftDate(f, -1), start_slot: 'evening', end_date: f, end_slot: 'morning' }
-  } else if (kind === 'morn-morn') {
-    model.value = { ...model.value, start_date: shiftDate(f, -1), start_slot: 'morning', end_date: f, end_slot: 'morning' }
-  } else if (kind === 'eve-eve') {
-    model.value = { ...model.value, start_date: shiftDate(f, -1), start_slot: 'evening', end_date: f, end_slot: 'evening' }
+  const set = (sd: string, ss: DaySlot, ed: string, es: DaySlot) => {
+    model.value = { ...model.value, start_date: sd, start_slot: ss, end_date: ed, end_slot: es }
+  }
+  const prev = shiftDate(f, -1)
+  switch (kind) {
+    // Single-day functions
+    case 'morn-only': return set(f, 'morning', f, 'morning')
+    case 'aftn-only': return set(f, 'afternoon', f, 'afternoon')
+    case 'eve-only':  return set(f, 'evening', f, 'evening')
+    case 'full':      return set(f, 'morning', f, 'evening')
+    // Multi-day functions (previous day → function date)
+    case 'eve-morn':  return set(prev, 'evening', f, 'morning')
+    case 'morn-morn': return set(prev, 'morning', f, 'morning')
+    case 'eve-eve':   return set(prev, 'evening', f, 'evening')
   }
 }
 
@@ -136,8 +155,17 @@ defineExpose({ availability })
     <!-- Quick presets -->
     <div v-if="model.function_date" style="margin-top:18px">
       <label class="field-label">Quick presets</label>
+      <!-- Single-day functions -->
+      <div class="preset-group-label">Single day</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="smb-filter-pill" @click="applyPreset('morn-only')">Morning only</button>
+        <button type="button" class="smb-filter-pill" @click="applyPreset('aftn-only')">Afternoon only</button>
+        <button type="button" class="smb-filter-pill" @click="applyPreset('eve-only')">Evening only</button>
         <button type="button" class="smb-filter-pill" @click="applyPreset('full')">Full day</button>
+      </div>
+      <!-- Multi-day functions (spill into the previous day) -->
+      <div class="preset-group-label" style="margin-top:10px">Multi-day</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" class="smb-filter-pill" @click="applyPreset('eve-morn')">Prev Eve → Morn</button>
         <button type="button" class="smb-filter-pill" @click="applyPreset('morn-morn')">Prev Morn → Morn</button>
         <button type="button" class="smb-filter-pill" @click="applyPreset('eve-eve')">Prev Eve → Eve</button>
@@ -156,24 +184,23 @@ defineExpose({ availability })
         />
         <div class="slot-toggle">
           <button
+            v-for="s in DAY_SLOTS"
+            :key="s"
             type="button"
-            :class="['smb-filter-pill', model.start_slot === 'morning' ? 'is-active' : '']"
-            @click="model = { ...model, start_slot: 'morning' }"
-          >{{ SLOT_LABEL.morning }}</button>
-          <button
-            type="button"
-            :class="['smb-filter-pill', model.start_slot === 'evening' ? 'is-active' : '']"
-            @click="model = { ...model, start_slot: 'evening' }"
-          >{{ SLOT_LABEL.evening }}</button>
+            :class="['smb-filter-pill', model.start_slot === s ? 'is-active' : '']"
+            @click="model = { ...model, start_slot: s }"
+          >{{ SLOT_LABEL[s] }}</button>
         </div>
       </div>
       <div v-if="showTimes" class="slot-time-row">
-        <input
-          type="time"
+        <select
           class="input slot-time-input"
-          :value="timeInputValue(model.start_time)"
-          @input="model = { ...model, start_time: ($event.target as HTMLInputElement).value || null }"
-        />
+          :value="hourValue(model.start_time)"
+          @change="model = { ...model, start_time: ($event.target as HTMLSelectElement).value || null }"
+        >
+          <option value="">— Hour —</option>
+          <option v-for="o in hourOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
         <span class="slot-time-hint">Start time · optional</span>
       </div>
     </div>
@@ -190,24 +217,23 @@ defineExpose({ availability })
         />
         <div class="slot-toggle">
           <button
+            v-for="s in DAY_SLOTS"
+            :key="s"
             type="button"
-            :class="['smb-filter-pill', model.end_slot === 'morning' ? 'is-active' : '']"
-            @click="model = { ...model, end_slot: 'morning' }"
-          >{{ SLOT_LABEL.morning }}</button>
-          <button
-            type="button"
-            :class="['smb-filter-pill', model.end_slot === 'evening' ? 'is-active' : '']"
-            @click="model = { ...model, end_slot: 'evening' }"
-          >{{ SLOT_LABEL.evening }}</button>
+            :class="['smb-filter-pill', model.end_slot === s ? 'is-active' : '']"
+            @click="model = { ...model, end_slot: s }"
+          >{{ SLOT_LABEL[s] }}</button>
         </div>
       </div>
       <div v-if="showTimes" class="slot-time-row">
-        <input
-          type="time"
+        <select
           class="input slot-time-input"
-          :value="timeInputValue(model.end_time)"
-          @input="model = { ...model, end_time: ($event.target as HTMLInputElement).value || null }"
-        />
+          :value="hourValue(model.end_time)"
+          @change="model = { ...model, end_time: ($event.target as HTMLSelectElement).value || null }"
+        >
+          <option value="">— Hour —</option>
+          <option v-for="o in hourOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
         <span class="slot-time-hint">End time · optional</span>
       </div>
     </div>
@@ -242,6 +268,14 @@ defineExpose({ availability })
 
 <style scoped>
 .slot-picker { display: block; }
+
+.preset-group-label {
+  font: 500 10.5px/1 var(--font-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+  margin-bottom: 6px;
+}
 
 .slot-row {
   display: grid;

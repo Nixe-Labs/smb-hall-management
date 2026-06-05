@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   bucketFor,
   defaultDueDate,
+  dueDateWithin,
   dueInDays,
   dueLabel,
   summarize,
@@ -17,6 +18,21 @@ describe('defaultDueDate', () => {
   })
   it('respects custom lead days', () => {
     expect(defaultDueDate('2026-06-15', 60)).toBe('2026-04-16')
+  })
+})
+
+describe('dueDateWithin', () => {
+  it('defaults to today + 30 days when the function is far out', () => {
+    expect(dueDateWithin('2026-12-25', 30, today)).toBe('2026-06-14') // 15 May + 30d
+  })
+  it('caps at the function date when the event is sooner than 30 days', () => {
+    expect(dueDateWithin('2026-05-28', 30, today)).toBe('2026-05-28')
+  })
+  it('falls back to today + 30 when no function date is picked yet', () => {
+    expect(dueDateWithin(null, 30, today)).toBe('2026-06-14')
+  })
+  it('honors a custom lead window', () => {
+    expect(dueDateWithin('2026-12-25', 15, today)).toBe('2026-05-30')
   })
 })
 

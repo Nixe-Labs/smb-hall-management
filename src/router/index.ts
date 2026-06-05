@@ -99,6 +99,12 @@ const routes: RouteRecordRaw[] = [
         meta: { roles: ['admin'] as UserRole[] },
       },
       {
+        path: 'settings/event-types',
+        name: 'event-types',
+        component: () => import('@/pages/settings/EventTypesPage.vue'),
+        meta: { roles: ['admin'] as UserRole[] },
+      },
+      {
         path: 'settings/bank-accounts',
         name: 'bank-accounts',
         component: () => import('@/pages/settings/BankAccountsPage.vue'),

@@ -21,7 +21,10 @@ export interface Booking {
   end_time: string | null
   customer_name: string
   customer_phone: string | null
+  customer_phones: string[] | null
   customer_address: string | null
+  event_type: string | null
+  event_type_other: string | null
   rent: number
   status: BookingStatus
   notes: string | null
@@ -53,8 +56,11 @@ export interface Enquiry {
   id: string
   customer_name: string
   customer_phone: string | null
+  customer_phones: string[] | null
   customer_address: string | null
   customer_email: string | null
+  event_type: string | null
+  event_type_other: string | null
   source: string | null
   status: EnquiryStatus
   notes: string | null
@@ -140,6 +146,11 @@ export interface BillItem {
   booking_id: string
   category_id: string
   amount: number
+  // Per-unit breakdown (migration 015). `amount` is always the line total
+  // (rate × quantity); these three are NULL for flat items.
+  unit: string | null
+  rate: number | null
+  quantity: number | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -172,7 +183,10 @@ export interface BillCategory {
   is_default: boolean
   is_active: boolean
   sort_order: number
+  // For per-unit categories (unit != null) default_amount is the per-unit
+  // rate; for flat categories it's the default flat amount.
   default_amount: number | null
+  unit: string | null
   created_at: string
   updated_at: string
 }
@@ -181,6 +195,17 @@ export interface ExpenseCategory {
   id: string
   name: string
   is_default: boolean
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface EventType {
+  id: string
+  name: string
+  // When true, selecting this type reveals a free-text box (the "Others" case).
+  is_other: boolean
   is_active: boolean
   sort_order: number
   created_at: string

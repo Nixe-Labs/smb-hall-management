@@ -20,6 +20,7 @@ export interface BookingFormData {
   end_time: string | null
   customer_name: string
   customer_phone: string
+  customer_phones: string[]
   customer_address: string
   rent: number
   status: Booking['status']

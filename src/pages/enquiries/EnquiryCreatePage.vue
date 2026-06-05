@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'primevue/usetoast'
 import SlotRangePicker from '@/components/booking/SlotRangePicker.vue'
+import PhoneNumbersInput from '@/components/common/PhoneNumbersInput.vue'
+import { splitPhones, validatePhones } from '@/lib/utils/phones'
 import type { DaySlot } from '@/types/enums'
+import type { EventType } from '@/types/database'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -27,12 +30,27 @@ function emptyRange(): RangeValue {
 
 const form = ref({
   customer_name: '',
-  customer_phone: '',
   customer_address: '',
   customer_email: '',
+  event_type: '',
+  event_type_other: '',
   source: '',
   notes: '',
 })
+
+const eventTypes = ref<EventType[]>([])
+const eventTypeIsOther = computed(() =>
+  eventTypes.value.find(t => t.name === form.value.event_type)?.is_other ?? false
+)
+onMounted(async () => {
+  const { data } = await supabase
+    .from('event_types').select('*').eq('is_active', true).order('sort_order')
+  eventTypes.value = (data as EventType[]) ?? []
+})
+
+// Contact numbers — index 0 is the primary (required). Extras stored in
+// enquiries.customer_phones. Always ≥1 row.
+const phones = ref<string[]>([''])
 
 const primary = ref<RangeValue>(emptyRange())
 const alternates = ref<RangeValue[]>([])
@@ -59,15 +77,24 @@ async function handleSubmit() {
     toast.add({ severity: 'warn', summary: 'Required', detail: 'Primary requested date + range is needed', life: 3000 })
     return
   }
+  const phoneError = validatePhones(phones.value, { requireFirst: true })
+  if (phoneError) {
+    toast.add({ severity: 'warn', summary: 'Check mobile numbers', detail: phoneError, life: 4000 })
+    return
+  }
   loading.value = true
   try {
+    const { primary: primaryPhone, extras: extraPhones } = splitPhones(phones.value)
     const { data: enq, error: enqErr } = await supabase
       .from('enquiries')
       .insert({
         customer_name: form.value.customer_name,
-        customer_phone: form.value.customer_phone || null,
+        customer_phone: primaryPhone,
+        customer_phones: extraPhones,
         customer_address: form.value.customer_address || null,
         customer_email: form.value.customer_email || null,
+        event_type: form.value.event_type || null,
+        event_type_other: eventTypeIsOther.value ? (form.value.event_type_other || null) : null,
         source: form.value.source || null,
         notes: form.value.notes || null,
         status: 'new',
@@ -131,16 +158,11 @@ async function handleSubmit() {
     </div>
 
     <form class="form-stack fade-up delay-2" @submit.prevent="handleSubmit">
-      <div class="form-grid-2">
-        <div>
-          <label class="field-label">Customer name *</label>
-          <input class="input" v-model="form.customer_name" placeholder="Full name" required />
-        </div>
-        <div>
-          <label class="field-label">Phone</label>
-          <input class="input" v-model="form.customer_phone" placeholder="+91 …" />
-        </div>
+      <div>
+        <label class="field-label">Customer name *</label>
+        <input class="input" v-model="form.customer_name" placeholder="Full name" required />
       </div>
+      <PhoneNumbersInput v-model="phones" :require-first="true" />
       <div class="form-grid-2">
         <div>
           <label class="field-label">Email</label>
@@ -152,6 +174,19 @@ async function handleSubmit() {
             <option value="">— Pick —</option>
             <option v-for="s in sourceOptions" :key="s" :value="s">{{ s }}</option>
           </select>
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label">Type of event</label>
+          <select class="input" v-model="form.event_type">
+            <option value="">— Select —</option>
+            <option v-for="t in eventTypes" :key="t.id" :value="t.name">{{ t.name }}</option>
+          </select>
+        </div>
+        <div v-if="eventTypeIsOther">
+          <label class="field-label">Specify event</label>
+          <input class="input" v-model="form.event_type_other" placeholder="e.g. Birthday, Temple function" />
         </div>
       </div>
       <div>

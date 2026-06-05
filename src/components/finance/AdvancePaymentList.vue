@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate } from '@/lib/utils/dates'
 import type { AdvancePayment, BankAccount } from '@/types/database'
 import type { PaymentMethod } from '@/types/enums'
+import { paymentMethodLabel, paymentMethodOptions } from '@/lib/utils/payments'
 
 const props = defineProps<{
   bookingId: string
@@ -31,7 +32,9 @@ const showModal = ref(false)
 const editing = ref<AdvanceForm>({})
 const saving = ref(false)
 
-const paymentMethods = ['cash', 'cheque', 'online']
+// Standard methods, plus the row's current value if it's a legacy one (online)
+// so editing an old advance never drops it.
+const methodOptions = computed(() => paymentMethodOptions(editing.value.payment_method))
 const cashAccountId = computed(() => props.bankAccounts.find(a => a.type === 'cash')?.id ?? '')
 
 // Default cash receipts to the Cash on hand account; when switching away from
@@ -153,7 +156,7 @@ function accountName(id: string | null): string {
           <tr v-for="adv in advances" :key="adv.id">
             <td style="font-family:var(--font-mono);font-size:12px">ADV-{{ String(adv.advance_number).padStart(2,'0') }}</td>
             <td>{{ adv.payment_date ? formatDate(adv.payment_date) : '—' }}</td>
-            <td style="text-transform:capitalize;color:var(--ash)">{{ adv.payment_method ?? '—' }}</td>
+            <td style="color:var(--ash)">{{ paymentMethodLabel(adv.payment_method) }}</td>
             <td style="color:var(--ash)">{{ accountName(adv.deposit_account_id) }}</td>
             <td style="text-align:right;font-family:var(--font-display);font-weight:600">{{ formatCurrency(adv.amount) }}</td>
             <td v-if="canEdit" style="text-align:right">
@@ -185,7 +188,7 @@ function accountName(id: string | null): string {
               <div>
                 <label class="field-label">Payment Method</label>
                 <select class="input" v-model="editing.payment_method">
-                  <option v-for="m in paymentMethods" :key="m" :value="m" style="text-transform:capitalize">{{ m }}</option>
+                  <option v-for="m in methodOptions" :key="m" :value="m">{{ paymentMethodLabel(m) }}</option>
                 </select>
               </div>
               <div>

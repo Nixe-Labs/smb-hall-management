@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useToast } from 'primevue/usetoast'
+import { formatCurrency } from '@/lib/utils/currency'
+import { BILL_UNITS, unitDef } from '@/lib/utils/billItems'
 import type { BillCategory } from '@/types/database'
 
 const router = useRouter()
@@ -41,10 +43,15 @@ async function save() {
   }
   saving.value = true
   try {
+    const unit = editingItem.value.unit || null
+    const amt = editingItem.value.default_amount
     const payload = {
       name: editingItem.value.name,
       is_active: editingItem.value.is_active ?? true,
       sort_order: editingItem.value.sort_order ?? 0,
+      unit,
+      // Stored as the per-unit rate when unit is set, else the flat default.
+      default_amount: amt === undefined || amt === null || amt === ('' as unknown) ? null : Number(amt),
     }
     if (editingItem.value.id) {
       const { error } = await supabase.from('bill_categories').update(payload).eq('id', editingItem.value.id)
@@ -61,6 +68,12 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+function defaultLabel(item: BillCategory): string {
+  if (item.default_amount == null) return ''
+  const money = formatCurrency(Number(item.default_amount))
+  return item.unit ? `${money} ${unitDef(item.unit)?.short ?? ''}` : money
 }
 
 async function toggleActive(item: BillCategory) {
@@ -125,7 +138,10 @@ onMounted(fetchCategories)
         <div class="st-cell" style="flex:1;color:var(--ash);padding:40px 0">No categories yet.</div>
       </div>
       <div v-for="item in categories" :key="item.id" class="st-row">
-        <div class="st-cell" data-label="Item" style="flex:1 1 0;font-weight:500">{{ item.name }}</div>
+        <div class="st-cell" data-label="Item" style="flex:1 1 0;font-weight:500">
+          {{ item.name }}
+          <span v-if="defaultLabel(item)" style="font-family:var(--font-mono);font-size:11px;font-weight:400;color:var(--ash);margin-left:8px">{{ defaultLabel(item) }}</span>
+        </div>
         <div class="st-cell col-hide-narrow" data-label="Default" style="flex:0 0 80px;text-align:center">
           <span v-if="item.is_default" class="pill pill-on">Yes</span>
           <span v-else style="color:var(--ash)">—</span>
@@ -162,6 +178,23 @@ onMounted(fetchCategories)
                 <label class="field-label">Name *</label>
                 <input class="input" v-model="editingItem.name" placeholder="Category name" />
               </div>
+              <div class="form-grid-2" style="gap:12px">
+                <div>
+                  <label class="field-label">Pricing</label>
+                  <select class="input" v-model="editingItem.unit">
+                    <option :value="null">Flat amount</option>
+                    <option v-for="u in BILL_UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">{{ editingItem.unit ? `Rate (₹ ${unitDef(editingItem.unit)?.short})` : 'Default amount (₹)' }}</label>
+                  <input type="number" class="input" v-model.number="editingItem.default_amount" placeholder="0" min="0" />
+                </div>
+              </div>
+              <p style="font-size:12px;color:var(--ash);margin:-4px 0 0">
+                <template v-if="editingItem.unit">Billed as rate × quantity on each booking — the user enters the {{ unitDef(editingItem.unit)?.qty }}.</template>
+                <template v-else>A flat default pre-filled on new bookings (leave blank for none).</template>
+              </p>
               <div>
                 <label class="field-label">Sort Order</label>
                 <input type="number" class="input" v-model.number="editingItem.sort_order" min="0" />

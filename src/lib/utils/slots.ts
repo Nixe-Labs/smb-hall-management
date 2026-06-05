@@ -7,17 +7,24 @@ export interface SlotKey {
   slot: DaySlot
 }
 
+// Single source of truth for the slots and their order. Mirrors the day_slot
+// enum (morning < afternoon < evening). Adding a future slot = one edit here.
+export const DAY_SLOTS: DaySlot[] = ['morning', 'afternoon', 'evening']
+
 export const SLOT_LABEL: Record<DaySlot, string> = {
   morning: 'Morning',
+  afternoon: 'Afternoon',
   evening: 'Evening',
 }
 
 export const SLOT_SHORT: Record<DaySlot, string> = {
   morning: 'Morn',
+  afternoon: 'Aftn',
   evening: 'Eve',
 }
 
-const SLOT_ORDER: Record<DaySlot, number> = { morning: 0, evening: 1 }
+const SLOT_ORDER: Record<DaySlot, number> =
+  Object.fromEntries(DAY_SLOTS.map((s, i) => [s, i])) as Record<DaySlot, number>
 
 export function compareSlots(a: SlotKey, b: SlotKey): number {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1
@@ -38,7 +45,7 @@ export function expandSlots(
   const end = parseISO(endDate)
   while (cursor <= end) {
     const dateStr = format(cursor, 'yyyy-MM-dd')
-    for (const slot of ['morning', 'evening'] as DaySlot[]) {
+    for (const slot of DAY_SLOTS) {
       const k: SlotKey = { date: dateStr, slot }
       const beforeStart = compareSlots(k, { date: startDate, slot: startSlot }) < 0
       const afterEnd = compareSlots(k, { date: endDate, slot: endSlot }) > 0

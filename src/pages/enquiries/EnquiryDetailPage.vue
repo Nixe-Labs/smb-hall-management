@@ -6,6 +6,7 @@ import { usePermissions } from '@/composables/usePermissions'
 import { useToast } from 'primevue/usetoast'
 import { formatDate } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
+import { allPhones, telHref, waHref } from '@/lib/utils/phones'
 import type { Enquiry, EnquiryDate } from '@/types/database'
 import type { EnquiryStatus } from '@/types/enums'
 
@@ -16,6 +17,12 @@ const { canEdit, canDelete } = usePermissions()
 
 const enquiryId = computed(() => route.params.id as string)
 const enquiry = ref<Enquiry | null>(null)
+const contactPhones = computed(() => allPhones(enquiry.value?.customer_phone, enquiry.value?.customer_phones))
+const eventTypeLabel = computed(() => {
+  const e = enquiry.value
+  if (!e?.event_type) return ''
+  return e.event_type_other ? `${e.event_type} · ${e.event_type_other}` : e.event_type
+})
 const dates = ref<EnquiryDate[]>([])
 const loading = ref(true)
 const showDelete = ref(false)
@@ -196,12 +203,20 @@ onMounted(fetchEnquiry)
           <h2 class="t-h2" style="margin-bottom:24px">Contact</h2>
           <div class="form-grid-2" style="gap:24px">
             <div>
-              <div class="t-eyebrow" style="margin-bottom:8px">Phone</div>
-              <div style="font-size:16px">{{ enquiry.customer_phone || '—' }}</div>
+              <div class="t-eyebrow" style="margin-bottom:8px">{{ contactPhones.length > 1 ? 'Phone numbers' : 'Phone' }}</div>
+              <div v-if="contactPhones.length === 0" style="font-size:16px">—</div>
+              <div v-for="p in contactPhones" :key="p" style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+                <a :href="telHref(p)!" style="font-size:16px;color:var(--ink);text-decoration:none">{{ p }}</a>
+                <a :href="waHref(p)!" target="_blank" rel="noopener" title="WhatsApp" style="font-family:var(--font-mono);font-size:11px;color:#1a8a4a;text-decoration:none">wa</a>
+              </div>
             </div>
             <div>
               <div class="t-eyebrow" style="margin-bottom:8px">Email</div>
               <div style="font-size:14px">{{ enquiry.customer_email || '—' }}</div>
+            </div>
+            <div v-if="eventTypeLabel">
+              <div class="t-eyebrow" style="margin-bottom:8px">Event type</div>
+              <div style="font-size:14px">{{ eventTypeLabel }}</div>
             </div>
             <div style="grid-column:1 / -1">
               <div class="t-eyebrow" style="margin-bottom:8px">Address</div>

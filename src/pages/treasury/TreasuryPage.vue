@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'primevue/usetoast'
 import { formatCurrency } from '@/lib/utils/currency'
 import { formatDate, toISODate } from '@/lib/utils/dates'
+import { paymentMethodLabel } from '@/lib/utils/payments'
 import type { BankAccount, AccountBalance, AccountMovement, AccountMovementType, AccountTransfer, AdvancePayment, Booking } from '@/types/database'
 import {
   buildBookingTrail,
@@ -488,7 +489,7 @@ onMounted(loadAll)
                 <div class="trail-row-head">
                   <div>
                     <span class="t-mono" style="font-size:11px;color:var(--ash)">ADV-{{ String(row.advance.advance_number).padStart(2,'0') }}</span>
-                    <span style="margin-left:10px;font-size:13px;text-transform:capitalize;color:var(--ash)">{{ row.advance.payment_method ?? '—' }}</span>
+                    <span style="margin-left:10px;font-size:13px;color:var(--ash)">{{ paymentMethodLabel(row.advance.payment_method) }}</span>
                     <span style="margin-left:10px;font-size:13px;color:var(--ash)">{{ row.advance.payment_date ? formatDate(row.advance.payment_date) : '—' }}</span>
                   </div>
                   <div class="t-num" style="font-size:18px;font-weight:600">{{ formatCurrency(row.advance.amount) }}</div>

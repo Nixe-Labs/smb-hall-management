@@ -8,6 +8,7 @@
     "build": "vue-tsc -b && vite build",
     "build:native": "VITE_CAPACITOR=true vue-tsc -b && VITE_CAPACITOR=true vite build",
     "preview": "vite preview",
+    "backup": "node scripts/backup-data.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "cap:sync": "npm run build:native && cap sync",

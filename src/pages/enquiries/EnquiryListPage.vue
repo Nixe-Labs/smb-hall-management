@@ -29,7 +29,8 @@ const filtered = computed(() => {
     if (search.value) {
       const q = search.value.toLowerCase()
       const inName = e.customer_name.toLowerCase().includes(q)
-      const inPhone = (e.customer_phone ?? '').toLowerCase().includes(q)
+      const inPhone = [e.customer_phone, ...(e.customer_phones ?? [])]
+        .some(p => (p ?? '').toLowerCase().includes(q))
       if (!inName && !inPhone) return false
     }
     return true
@@ -81,7 +82,7 @@ function exportCSV() {
   const headers = ['Customer', 'Phone', 'Email', 'Address', 'Function Date', 'Hall Use Range', 'Alt count', 'Status', 'Source', 'Notes', 'Created']
   const rows = filtered.value.map(e => [
     e.customer_name,
-    e.customer_phone ?? '',
+    [e.customer_phone, ...(e.customer_phones ?? [])].filter(Boolean).join(' / '),
     e.customer_email ?? '',
     (e.customer_address ?? '').replace(/\n/g, ' '),
     e.primary?.function_date ?? '',
@@ -178,7 +179,7 @@ onMounted(fetchEnquiries)
             @click="router.push({ name: 'enquiry-detail', params: { id: e.id } })"
           >
             <td data-label="Customer" style="font-weight:600">{{ e.customer_name }}</td>
-            <td data-label="Phone" style="font-family:var(--font-mono);font-size:12px;color:var(--ash)">{{ e.customer_phone || '—' }}</td>
+            <td data-label="Phone" style="font-family:var(--font-mono);font-size:12px;color:var(--ash)">{{ e.customer_phone || '—' }}<span v-if="(e.customer_phones?.length ?? 0) > 0" style="color:var(--accent-ink);margin-left:6px">+{{ e.customer_phones!.length }}</span></td>
             <td data-label="Function date">{{ e.primary ? formatDate(e.primary.function_date) : '—' }}</td>
             <td data-label="Hall use" style="font-family:var(--font-mono);font-size:11px;color:var(--ash)">{{ e.primary ? formatRange(e.primary) : '—' }}</td>
             <td data-label="Alt" style="color:var(--ash);font-size:12px">{{ e.alt_count > 0 ? `+${e.alt_count}` : '—' }}</td>

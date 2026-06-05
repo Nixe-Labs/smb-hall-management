@@ -61,3 +61,6 @@ android/app/google-services.json
 # source of truth is capacitor.config.ts at the repo root.
 ios/App/App/capacitor.config.json
 android/app/src/main/assets/capacitor.config.json
+
+# Local data backups (contain customer PII — never commit)
+backups/

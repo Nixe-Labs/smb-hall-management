@@ -19,7 +19,7 @@ BEGIN;
 
 -- ---------- 002 · Half-day slot bookings ----------
 DO $$ BEGIN
-  CREATE TYPE day_slot AS ENUM ('morning', 'evening');
+  CREATE TYPE day_slot AS ENUM ('morning', 'afternoon', 'evening');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS start_date DATE;
@@ -62,7 +62,7 @@ CREATE OR REPLACE FUNCTION expand_slots(
 RETURNS TABLE(slot_date DATE, slot day_slot) AS $$
   SELECT d::DATE, sl
   FROM generate_series(s_date, e_date, INTERVAL '1 day') d
-  CROSS JOIN (VALUES ('morning'::day_slot), ('evening'::day_slot)) v(sl)
+  CROSS JOIN unnest(enum_range(NULL::day_slot)) AS v(sl)
   WHERE (d::DATE > s_date OR sl >= s_slot)
     AND (d::DATE < e_date OR sl <= e_slot)
   ORDER BY d, sl

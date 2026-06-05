@@ -9,6 +9,7 @@ import { formatDate, formatTimeRange } from '@/lib/utils/dates'
 import { calculateBookingSummary } from '@/lib/utils/calculations'
 import { defaultDueDate, dueLabel } from '@/lib/utils/forecast'
 import { formatRange } from '@/lib/utils/slots'
+import { allPhones, telHref, waHref } from '@/lib/utils/phones'
 import type { Booking, AdvancePayment, BillItem, Expense, Deposit, BillCategory, ExpenseCategory, BankAccount, EnquiryMatch } from '@/types/database'
 import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
 import AdvancePaymentList from '@/components/finance/AdvancePaymentList.vue'
@@ -23,6 +24,12 @@ const { canEdit, canDelete } = usePermissions()
 
 const bookingId = computed(() => route.params.id as string)
 const activeTab = ref('advances')
+const contactPhones = computed(() => allPhones(booking.value?.customer_phone, booking.value?.customer_phones))
+const eventTypeLabel = computed(() => {
+  const b = booking.value
+  if (!b?.event_type) return ''
+  return b.event_type_other ? `${b.event_type} · ${b.event_type_other}` : b.event_type
+})
 const showCancel = ref(false)
 const showDelete = ref(false)
 const showEditForecast = ref(false)
@@ -305,13 +312,21 @@ onMounted(fetchAll)
           <h2 class="t-h2" style="margin-bottom:24px">Contact</h2>
           <div class="form-grid-2" style="gap:24px">
             <div>
-              <div class="t-eyebrow" style="margin-bottom:8px">Phone</div>
-              <div style="font-size:16px">{{ booking.customer_phone || '—' }}</div>
+              <div class="t-eyebrow" style="margin-bottom:8px">{{ contactPhones.length > 1 ? 'Phone numbers' : 'Phone' }}</div>
+              <div v-if="contactPhones.length === 0" style="font-size:16px">—</div>
+              <div v-for="p in contactPhones" :key="p" style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+                <a :href="telHref(p)!" style="font-size:16px;color:var(--ink);text-decoration:none">{{ p }}</a>
+                <a :href="waHref(p)!" target="_blank" rel="noopener" title="WhatsApp" style="font-family:var(--font-mono);font-size:11px;color:#1a8a4a;text-decoration:none">wa</a>
+              </div>
             </div>
             <div>
               <div class="t-eyebrow" style="margin-bottom:8px">Address</div>
               <div style="font-size:14px;line-height:1.5">{{ booking.customer_address || '—' }}</div>
             </div>
+          </div>
+          <div v-if="eventTypeLabel" style="margin-top:20px">
+            <div class="t-eyebrow" style="margin-bottom:8px">Event type</div>
+            <div style="font-size:16px">{{ eventTypeLabel }}</div>
           </div>
         </div>
         <div style="min-height:0">
