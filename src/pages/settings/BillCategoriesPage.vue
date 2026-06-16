@@ -198,7 +198,7 @@ onMounted(fetchCategories)
                 </div>
                 <div>
                   <label class="field-label">{{ editingItem.unit ? `Rate (₹ ${unitDef(editingItem.unit)?.short})` : 'Default amount (₹)' }}</label>
-                  <input type="number" class="input" v-model.number="editingItem.default_amount" placeholder="0" min="0" />
+                  <input type="number" class="input" v-model.number="editingItem.default_amount" placeholder="0" min="0" :step="editingItem.unit ? 100 : 1000" />
                 </div>
               </div>
               <div v-if="editingItem.unit">

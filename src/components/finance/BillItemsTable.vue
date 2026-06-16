@@ -200,7 +200,7 @@ const total = () => props.billItems.reduce((s, i) => s + i.amount, 0)
               <div v-if="editingUnit" class="form-grid-2" style="gap:12px">
                 <div>
                   <label class="field-label">Rate (₹ {{ editingUnitDef?.short }}) *</label>
-                  <input type="number" class="input" v-model.number="editing.rate" placeholder="0" min="0" />
+                  <input type="number" class="input" v-model.number="editing.rate" placeholder="0" min="0" step="100" />
                 </div>
                 <div>
                   <label class="field-label">{{ editingUnitDef?.qty || 'Quantity' }} *</label>

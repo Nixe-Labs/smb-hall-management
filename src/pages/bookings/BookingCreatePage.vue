@@ -794,7 +794,7 @@ async function doSave() {
 
       <div>
         <label class="field-label">Rent Amount (₹) *</label>
-        <input type="number" class="input" v-model="form.rent" placeholder="0" min="0" required />
+        <input type="number" class="input" v-model="form.rent" placeholder="0" min="0" step="1000" required />
         <button
           v-if="showApply && demandInfo && suggestedRent != null"
           type="button"
@@ -842,7 +842,7 @@ async function doSave() {
             </div>
             <div class="bill-unit-calc">
               <span class="bill-unit-cur">₹</span>
-              <input type="number" class="input bill-unit-input" v-model="item.rate" placeholder="rate" min="0" :title="`Rate ${unitShort(item.unit)}`" />
+              <input type="number" class="input bill-unit-input" v-model="item.rate" placeholder="rate" min="0" step="100" :title="`Rate ${unitShort(item.unit)}`" />
               <span class="bill-unit-x">×</span>
               <input type="number" class="input bill-unit-input" v-model="item.quantity" :placeholder="unitQtyLabel(item.unit)" min="0" :title="unitQtyLabel(item.unit)" />
               <span class="bill-unit-eq">= {{ formatCurrency(lineTotal(item)) }}</span>
@@ -867,7 +867,7 @@ async function doSave() {
         <div class="form-grid-2">
           <div>
             <label class="field-label">Balance to collect (₹)</label>
-            <input type="number" class="input" :value="form.expected_advance_amount" @input="onExpectedInput" placeholder="e.g. 50000" min="0" />
+            <input type="number" class="input" :value="form.expected_advance_amount" @input="onExpectedInput" placeholder="e.g. 50000" min="0" step="1000" />
             <p v-if="!isEditing" style="margin-top:6px;font-size:12px;color:var(--ash)">
               Auto-set to the balance — total bill {{ formatCurrency(totalBill) }} − first advance {{ formatCurrency(firstAdvanceAmount) }} = <strong style="color:var(--ink)">{{ formatCurrency(suggestedExpected) }}</strong>. Edit to override. Drives the dashboard collection forecast.
             </p>
@@ -906,7 +906,7 @@ async function doSave() {
         <div class="form-grid-2">
           <div>
             <label class="field-label">Amount (₹)</label>
-            <input type="number" class="input" :value="advanceNow.amount" @input="onAdvanceAmountInput" placeholder="e.g. 10000" min="0" :disabled="nextAdvanceSlot == null" />
+            <input type="number" class="input" :value="advanceNow.amount" @input="onAdvanceAmountInput" placeholder="e.g. 10000" min="0" step="1000" :disabled="nextAdvanceSlot == null" />
           </div>
           <div>
             <label class="field-label">Payment method</label>
