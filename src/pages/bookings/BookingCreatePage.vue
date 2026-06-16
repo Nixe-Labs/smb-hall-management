@@ -9,7 +9,7 @@ import TamilDemandBadge from '@/components/common/TamilDemandBadge.vue'
 import PhoneNumbersInput from '@/components/common/PhoneNumbersInput.vue'
 import { mergePhones, splitPhones, validatePhones, telHref, waHref } from '@/lib/utils/phones'
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL } from '@/lib/utils/payments'
-import { dueDateWithin } from '@/lib/utils/forecast'
+import { dueDateWithin, advancePolicy, advanceOutOfPolicy } from '@/lib/utils/forecast'
 import { buildDemandHistory, getDemandForDate, premiumAmount, type DemandHistory } from '@/lib/utils/tamilDemand'
 import { PAKSHA_LABEL } from '@/lib/utils/tamilCalendar'
 import { formatCurrency } from '@/lib/utils/currency'
@@ -17,7 +17,7 @@ import { toISODate } from '@/lib/utils/dates'
 import { formatRange } from '@/lib/utils/slots'
 import type { DaySlot, PaymentMethod } from '@/types/enums'
 import type { Booking, BillCategory, Enquiry, EnquiryDate, EnquiryMatch, BankAccount, EventType } from '@/types/database'
-import { diffBillItems, billItemsSubtotal, resolveBillItem, unitDef, type FormBillItem, type BillItemSnapshot } from '@/lib/utils/billItems'
+import { diffBillItems, billItemsSubtotal, resolveBillItem, unitDef, prefillQuantity, type FormBillItem, type BillItemSnapshot } from '@/lib/utils/billItems'
 
 const router = useRouter()
 const route = useRoute()
@@ -124,15 +124,18 @@ function prefillDefaultBillItems() {
   // The fixed standard table: every active category that has a default
   // amount/rate configured (Settings → Bill Categories) auto-fills on every new
   // booking, so staff never re-add the standard items by hand. Flat categories
-  // prefill their amount; per-unit categories (AC, etc.) prefill the rate with a
-  // blank quantity — present in the table, but only billed once the hours/units
-  // are entered (so they're never wrongly charged as a flat amount).
+  // prefill their amount; per-unit categories prefill the rate AND their default
+  // quantity — so a "1 unit" standard charge (gas, cleaning, rooms…) appears at
+  // rate × 1 ready to bill, while metered items (default_quantity 0, e.g. AC by
+  // the hour, EB by the meter) prefill a blank quantity so they're only billed
+  // once the real hours/units are entered.
   billItemsForm.value = billCategories.value
     .filter(c => c.default_amount != null && Number(c.default_amount) > 0)
-    .map(c => c.unit
-      ? { category_id: c.id, category_name: c.name, amount: '0', unit: c.unit, rate: String(c.default_amount), quantity: '' }
-      : { category_id: c.id, category_name: c.name, amount: String(c.default_amount) }
-    )
+    .map(c => {
+      if (!c.unit) return { category_id: c.id, category_name: c.name, amount: String(c.default_amount) }
+      const qty = prefillQuantity(c.default_quantity)
+      return { category_id: c.id, category_name: c.name, amount: '0', unit: c.unit, rate: String(c.default_amount), quantity: qty != null ? String(qty) : '' }
+    })
 }
 
 async function loadBillItemsForBooking(bookingId: string) {
@@ -170,15 +173,17 @@ function addBillItemRow(e: Event) {
   const cat = billCategories.value.find(c => c.id === id)
   if (!cat) return
   if (cat.unit) {
-    // Per-unit: seed the rate from the category default, leave quantity blank
-    // so the user must enter the hours/units before it counts.
+    // Per-unit: seed the rate and the category's default quantity. Metered
+    // items (default_quantity 0) seed a blank quantity so the user must enter
+    // the hours/units before the line counts.
+    const qty = prefillQuantity(cat.default_quantity)
     billItemsForm.value.push({
       category_id: cat.id,
       category_name: cat.name,
       amount: '0',
       unit: cat.unit,
       rate: cat.default_amount != null ? String(cat.default_amount) : '',
-      quantity: '',
+      quantity: qty != null ? String(qty) : '',
     })
   } else {
     billItemsForm.value.push({
@@ -465,6 +470,40 @@ watch(
     form.value.expected_advance_amount = suggestedExpected.value > 0 ? String(suggestedExpected.value) : ''
   }
 )
+
+// ── Advance policy: the booking advance should be 40–60% of rent ──────
+// Owner's rule (math lives in forecast.ts). We suggest the 50% midpoint and
+// softly warn (never block) when the entered advance falls outside the band.
+// Create mode only — in edit mode `advanceNow` is an additional payment, not
+// the booking deposit.
+const rentForAdvance = computed(() => Number(form.value.rent) || 0)
+const advancePol = computed(() => advancePolicy(rentForAdvance.value))
+const advanceMin = computed(() => advancePol.value.min)
+const advanceMax = computed(() => advancePol.value.max)
+const advanceSuggested = computed(() => advancePol.value.suggested)
+
+let advanceTouched = false
+function onAdvanceAmountInput(e: Event) {
+  advanceTouched = true
+  advanceNow.value.amount = (e.target as HTMLInputElement).value
+}
+
+// Prefill the first advance to the 50% midpoint of rent until staff override or
+// clear it (when no advance is taken). Stays blank until a rent is entered.
+watch(
+  () => rentForAdvance.value,
+  () => {
+    if (isEditing.value || advanceTouched) return
+    advanceNow.value.amount = advanceSuggested.value > 0 ? String(advanceSuggested.value) : ''
+  }
+)
+
+// Soft warning when the booking advance lands outside 40–60% of rent. Never for
+// an edit-mode top-up.
+const advanceOutOfRange = computed(() =>
+  !isEditing.value && advanceOutOfPolicy(Number(advanceNow.value.amount), rentForAdvance.value)
+)
+const advanceBelowMin = computed(() => Number(advanceNow.value.amount) < advanceMin.value)
 
 onMounted(async () => {
   // Categories must be loaded before edit prefill (to resolve names) or
@@ -824,20 +863,20 @@ async function doSave() {
       </div>
 
       <div style="border-top:1px solid var(--hair);padding-top:18px">
-        <div class="t-eyebrow" style="margin-bottom:12px">Advance forecast (optional)</div>
+        <div class="t-eyebrow" style="margin-bottom:12px">Balance &amp; due date (optional)</div>
         <div class="form-grid-2">
           <div>
-            <label class="field-label">Expected advance (₹)</label>
+            <label class="field-label">Balance to collect (₹)</label>
             <input type="number" class="input" :value="form.expected_advance_amount" @input="onExpectedInput" placeholder="e.g. 50000" min="0" />
             <p v-if="!isEditing" style="margin-top:6px;font-size:12px;color:var(--ash)">
-              Auto-set to the balance — total bill {{ formatCurrency(totalBill) }} − first advance {{ formatCurrency(firstAdvanceAmount) }} = <strong style="color:var(--ink)">{{ formatCurrency(suggestedExpected) }}</strong>. Edit to override.
+              Auto-set to the balance — total bill {{ formatCurrency(totalBill) }} − first advance {{ formatCurrency(firstAdvanceAmount) }} = <strong style="color:var(--ink)">{{ formatCurrency(suggestedExpected) }}</strong>. Edit to override. Drives the dashboard collection forecast.
             </p>
             <p v-if="expectedExceedsTotal" style="margin-top:6px;font-size:12px;color:var(--signal-red,#c0392b)">
               Greater than total bill ({{ formatCurrency(Number(form.expected_advance_amount)) }} &gt; {{ formatCurrency(totalBill) }}) — likely a leftover from the previous rent / bill items.
             </p>
           </div>
           <div>
-            <label class="field-label">Advance due by</label>
+            <label class="field-label">Balance due by</label>
             <input type="date" class="input" :value="form.advance_due_date" @input="onDueDateInput" />
             <p style="margin-top:6px;font-size:12px;color:var(--ash)">
               Defaults to 30 days from today (or the function date if that's sooner).
@@ -867,7 +906,7 @@ async function doSave() {
         <div class="form-grid-2">
           <div>
             <label class="field-label">Amount (₹)</label>
-            <input type="number" class="input" v-model="advanceNow.amount" placeholder="e.g. 10000" min="0" :disabled="nextAdvanceSlot == null" />
+            <input type="number" class="input" :value="advanceNow.amount" @input="onAdvanceAmountInput" placeholder="e.g. 10000" min="0" :disabled="nextAdvanceSlot == null" />
           </div>
           <div>
             <label class="field-label">Payment method</label>
@@ -876,6 +915,13 @@ async function doSave() {
             </select>
           </div>
         </div>
+        <!-- Advance policy: 40–60% of rent. Suggest the 50% midpoint, warn (don't block) if outside. -->
+        <p v-if="!isEditing && rentForAdvance > 0 && nextAdvanceSlot != null" style="font-size:12px;color:var(--ash);margin:8px 0 0">
+          Policy: advance is <strong style="color:var(--ink)">40–60% of rent</strong> — {{ formatCurrency(advanceMin) }}–{{ formatCurrency(advanceMax) }}. Suggested 50% = <strong style="color:var(--ink)">{{ formatCurrency(advanceSuggested) }}</strong> (prefilled — clear it if no advance was collected).
+        </p>
+        <p v-if="advanceOutOfRange" style="font-size:12px;color:var(--signal-red,#c0392b);margin:6px 0 0">
+          {{ formatCurrency(Number(advanceNow.amount)) }} is {{ advanceBelowMin ? 'below 40%' : 'above 60%' }} of rent ({{ formatCurrency(advanceMin) }}–{{ formatCurrency(advanceMax) }}). Save anyway if that's intended.
+        </p>
         <div v-if="nextAdvanceSlot != null" class="form-grid-2" style="margin-top:12px">
           <div>
             <label class="field-label">Advance date</label>
@@ -973,21 +1019,21 @@ async function doSave() {
         </div>
       </div>
 
-      <!-- Expected-advance exceeds total bill confirm -->
+      <!-- Balance exceeds total bill confirm -->
       <div v-if="showExpectedExceeds" class="smb-modal-overlay" @click.self="showExpectedExceeds = false">
         <div class="smb-modal">
           <div class="smb-modal-head">
-            <h3 class="t-h3">Expected advance exceeds total bill</h3>
+            <h3 class="t-h3">Balance to collect exceeds total bill</h3>
             <button class="smb-nav-iconbtn" @click="showExpectedExceeds = false">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
             </button>
           </div>
           <div class="smb-modal-body">
             <p style="color:var(--ash);line-height:1.55">
-              You're saving with <strong style="color:var(--ink)">Expected advance {{ formatCurrency(Number(form.expected_advance_amount)) }}</strong>
+              You're saving with a <strong style="color:var(--ink)">Balance to collect of {{ formatCurrency(Number(form.expected_advance_amount)) }}</strong>
               against a <strong style="color:var(--ink)">Total bill of {{ formatCurrency(totalBill) }}</strong>
               ({{ formatCurrency(Number(form.rent) || 0) }} rent + {{ formatCurrency(billItemsTotal) }} bill items).
-              The expected advance is larger than the total bill — usually a leftover from earlier values.
+              The balance is larger than the total bill — usually a leftover from earlier values.
             </p>
           </div>
           <div class="smb-modal-foot">

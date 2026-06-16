@@ -27,7 +27,7 @@ async function fetchCategories() {
 }
 
 function openAdd() {
-  editingItem.value = { name: '', is_active: true, sort_order: categories.value.length + 1 }
+  editingItem.value = { name: '', is_active: true, sort_order: categories.value.length + 1, default_quantity: 1 }
   showModal.value = true
 }
 
@@ -45,6 +45,7 @@ async function save() {
   try {
     const unit = editingItem.value.unit || null
     const amt = editingItem.value.default_amount
+    const qty = editingItem.value.default_quantity
     const payload = {
       name: editingItem.value.name,
       is_active: editingItem.value.is_active ?? true,
@@ -52,6 +53,9 @@ async function save() {
       unit,
       // Stored as the per-unit rate when unit is set, else the flat default.
       default_amount: amt === undefined || amt === null || amt === ('' as unknown) ? null : Number(amt),
+      // Per-unit only: quantity prefilled on a new booking. Null for flat
+      // categories (ignored there). 0 = present but unbilled until usage entered.
+      default_quantity: !unit || qty === undefined || qty === null || qty === ('' as unknown) ? null : Number(qty),
     }
     if (editingItem.value.id) {
       const { error } = await supabase.from('bill_categories').update(payload).eq('id', editingItem.value.id)
@@ -73,7 +77,13 @@ async function save() {
 function defaultLabel(item: BillCategory): string {
   if (item.default_amount == null) return ''
   const money = formatCurrency(Number(item.default_amount))
-  return item.unit ? `${money} ${unitDef(item.unit)?.short ?? ''}` : money
+  if (!item.unit) return money
+  const short = unitDef(item.unit)?.short ?? ''
+  const qty = item.default_quantity
+  // Show the prefilled quantity for fixed items (× 1, × 2…); metered items
+  // (0/blank) read as "enter usage" rather than a fixed default.
+  const qtyLabel = qty != null && Number(qty) > 0 ? ` × ${Number(qty)}` : ' · metered'
+  return `${money} ${short}${qtyLabel}`
 }
 
 async function toggleActive(item: BillCategory) {
@@ -191,8 +201,12 @@ onMounted(fetchCategories)
                   <input type="number" class="input" v-model.number="editingItem.default_amount" placeholder="0" min="0" />
                 </div>
               </div>
+              <div v-if="editingItem.unit">
+                <label class="field-label">Default {{ unitDef(editingItem.unit)?.qty }} per booking</label>
+                <input type="number" class="input" v-model.number="editingItem.default_quantity" placeholder="1" min="0" />
+              </div>
               <p style="font-size:12px;color:var(--ash);margin:-4px 0 0">
-                <template v-if="editingItem.unit">Billed as rate × quantity on each booking — the user enters the {{ unitDef(editingItem.unit)?.qty }}.</template>
+                <template v-if="editingItem.unit">Billed as rate × quantity on each booking. The default {{ unitDef(editingItem.unit)?.qty }} pre-fills on every new booking (editable per booking) — set it to 0 for a metered item that should only bill once the actual usage is entered.</template>
                 <template v-else>A flat default pre-filled on new bookings (leave blank for none).</template>
               </p>
               <div>

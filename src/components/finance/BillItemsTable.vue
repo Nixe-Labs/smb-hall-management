@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useToast } from 'primevue/usetoast'
 import { formatCurrency } from '@/lib/utils/currency'
-import { billItemBreakdown, unitDef } from '@/lib/utils/billItems'
+import { billItemBreakdown, unitDef, prefillQuantity } from '@/lib/utils/billItems'
 import type { BillItem, BillCategory } from '@/types/database'
 
 const props = defineProps<{
@@ -44,9 +44,11 @@ const editingLineAmount = computed(() => {
 // (per-unit) so they only type the quantity.
 function onCategoryChange() {
   const cat = editingCategory.value
-  // Seed the rate from the category default; user just enters the quantity.
+  // Seed the rate and the category's default quantity from the catalogue; the
+  // user can override either. Metered items (default_quantity 0) seed no
+  // quantity so the user must enter the hours/units.
   editing.value.rate = cat?.unit ? (cat.default_amount ?? undefined) : undefined
-  editing.value.quantity = undefined
+  editing.value.quantity = cat?.unit ? (prefillQuantity(cat.default_quantity) ?? undefined) : undefined
 }
 
 function openAdd() {
@@ -56,6 +58,14 @@ function openAdd() {
 
 function openEdit(item: BillItem) {
   editing.value = { ...item }
+  // Legacy flat line whose category is now per-unit (migration 022): render it
+  // as rate × quantity instead of blank inputs. Seed rate from the saved total
+  // at quantity 1 so the line total is preserved; the owner can adjust.
+  const cat = props.categories.find(c => c.id === item.category_id)
+  if (cat?.unit && (item.rate == null || item.quantity == null)) {
+    editing.value.rate = item.rate ?? item.amount
+    editing.value.quantity = item.quantity ?? 1
+  }
   showModal.value = true
 }
 

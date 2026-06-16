@@ -7,10 +7,41 @@ import {
   dueLabel,
   summarize,
   emptyForecastTotals,
+  advancePolicy,
+  advanceOutOfPolicy,
 } from '@/lib/utils/forecast'
 import type { BookingAdvanceForecast } from '@/types/database'
 
 const today = new Date(2026, 4, 15) // 15 May 2026 local — fixed clock for all tests
+
+describe('advancePolicy', () => {
+  it('returns the 40 / 50 / 60% band of rent', () => {
+    expect(advancePolicy(100000)).toEqual({ min: 40000, max: 60000, suggested: 50000 })
+  })
+  it('rounds to whole rupees', () => {
+    expect(advancePolicy(99999)).toEqual({ min: 40000, max: 59999, suggested: 50000 })
+  })
+  it('is all-zero for non-positive rent', () => {
+    expect(advancePolicy(0)).toEqual({ min: 0, max: 0, suggested: 0 })
+    expect(advancePolicy(-5000)).toEqual({ min: 0, max: 0, suggested: 0 })
+  })
+})
+
+describe('advanceOutOfPolicy', () => {
+  it('is false within the 40–60% band (inclusive of edges)', () => {
+    expect(advanceOutOfPolicy(40000, 100000)).toBe(false)
+    expect(advanceOutOfPolicy(50000, 100000)).toBe(false)
+    expect(advanceOutOfPolicy(60000, 100000)).toBe(false)
+  })
+  it('is true below 40% or above 60%', () => {
+    expect(advanceOutOfPolicy(39999, 100000)).toBe(true)
+    expect(advanceOutOfPolicy(75000, 100000)).toBe(true)
+  })
+  it('never flags a blank/zero advance or a zero rent', () => {
+    expect(advanceOutOfPolicy(0, 100000)).toBe(false)
+    expect(advanceOutOfPolicy(50000, 0)).toBe(false)
+  })
+})
 
 describe('defaultDueDate', () => {
   it('defaults to 30 days before function', () => {

@@ -34,6 +34,18 @@ export function unitDef(unit: string | null | undefined): UnitDef | null {
   return BILL_UNITS.find(u => u.value === unit) ?? { value: unit, label: `Per ${unit}`, short: `/${unit}`, qty: unit }
 }
 
+/**
+ * Quantity to prefill for a per-unit category on a new booking.
+ * Returns the configured default_quantity when > 0 (the owner's "fixed
+ * quantity per booking, editable"), or null when it's 0/blank — i.e. a metered
+ * item (AC hours, EB units) that should stay present-but-unbilled until staff
+ * enter the real usage.
+ */
+export function prefillQuantity(defaultQuantity: number | null | undefined): number | null {
+  const q = Number(defaultQuantity)
+  return defaultQuantity != null && q > 0 ? q : null
+}
+
 export interface FormBillItem {
   category_id: string
   category_name: string
@@ -136,7 +148,8 @@ export function billItemsSubtotal(formRows: FormBillItem[]): number {
   return formRows.reduce((s, r) => s + resolveBillItem(r).amount, 0)
 }
 
-/** Human breakdown for a per-unit line, e.g. "5 hrs × ₹3,000". Empty for flat. */
+/** Human breakdown for a per-unit line, e.g. "5 hours × ₹3,000" or
+ *  "1 unit × ₹2,500". Singularises the unit noun at quantity 1. Empty for flat. */
 export function billItemBreakdown(
   unit: string | null | undefined,
   rate: number | null | undefined,
@@ -145,5 +158,7 @@ export function billItemBreakdown(
   const def = unitDef(unit)
   if (!def || rate == null) return ''
   const qty = quantity ?? 0
-  return `${qty} ${def.qty} × ₹${Number(rate).toLocaleString('en-IN')}`
+  // qty label is plural ("hours"/"units"); drop the trailing "s" when qty is 1.
+  const noun = qty === 1 && def.qty.endsWith('s') ? def.qty.slice(0, -1) : def.qty
+  return `${qty} ${noun} × ₹${Number(rate).toLocaleString('en-IN')}`
 }

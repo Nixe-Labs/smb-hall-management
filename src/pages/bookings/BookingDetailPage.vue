@@ -359,10 +359,10 @@ onMounted(fetchAll)
               v-if="expectedExceedsBill"
               style="margin-bottom:12px;padding:10px 12px;border:1px solid var(--signal-red);border-radius:6px;background:rgba(192,57,43,0.06);color:var(--signal-red);font-size:12.5px;line-height:1.45"
             >
-              ⚠ Expected advance ({{ formatCurrency(Number(booking.expected_advance_amount)) }}) exceeds total bill ({{ formatCurrency(summary?.total_bill ?? 0) }}) — likely outdated. Use <strong>Edit forecast</strong> above to fix.
+              ⚠ Balance to collect ({{ formatCurrency(Number(booking.expected_advance_amount)) }}) exceeds total bill ({{ formatCurrency(summary?.total_bill ?? 0) }}) — likely outdated. Use <strong>Edit forecast</strong> above to fix.
             </div>
             <div class="fin-row">
-              <span class="fin-label">Expected Advance</span>
+              <span class="fin-label">Balance to Collect</span>
               <span class="fin-value">{{ formatCurrency(Number(booking.expected_advance_amount)) }}</span>
             </div>
             <div class="fin-row">
@@ -474,7 +474,7 @@ onMounted(fetchAll)
       <div v-if="showEditForecast" class="smb-modal-overlay" @click.self="showEditForecast = false">
         <div class="smb-modal">
           <div class="smb-modal-head">
-            <h3 class="t-h3">Advance forecast</h3>
+            <h3 class="t-h3">Balance &amp; due date</h3>
             <button class="smb-nav-iconbtn" @click="showEditForecast = false">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6l12 12M18 6l-12 12"/></svg>
             </button>
@@ -482,11 +482,11 @@ onMounted(fetchAll)
           <div class="smb-modal-body">
             <div style="display:flex;flex-direction:column;gap:14px">
               <div>
-                <label class="field-label">Expected advance (₹)</label>
+                <label class="field-label">Balance to collect (₹)</label>
                 <input type="number" class="input" v-model="editForecast.expected_advance_amount" placeholder="e.g. 50000" min="0" />
               </div>
               <div>
-                <label class="field-label">Advance due by</label>
+                <label class="field-label">Balance due by</label>
                 <input type="date" class="input" v-model="editForecast.advance_due_date" />
                 <p style="margin-top:6px;font-size:12px;color:var(--ash)">
                   Leave amount blank to remove this booking from the forecast.

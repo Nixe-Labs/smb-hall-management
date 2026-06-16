@@ -187,6 +187,9 @@ export interface BillCategory {
   // rate; for flat categories it's the default flat amount.
   default_amount: number | null
   unit: string | null
+  // Per-unit categories only: the quantity prefilled on a new booking
+  // (editable per booking). 0/NULL = present but unbilled until usage entered.
+  default_quantity: number | null
   created_at: string
   updated_at: string
 }

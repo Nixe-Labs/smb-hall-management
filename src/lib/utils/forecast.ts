@@ -15,6 +15,42 @@ import type { BookingAdvanceForecast } from '@/types/database'
 
 export const DEFAULT_ADVANCE_LEAD_DAYS = 30
 
+// ── Advance policy: the booking advance should be 40–60% of rent ──────
+// Owner's rule. The app suggests the 50% midpoint and warns (never blocks)
+// when the entered advance falls outside the band.
+export const ADVANCE_MIN_PCT = 0.4
+export const ADVANCE_MAX_PCT = 0.6
+
+export interface AdvancePolicy {
+  /** 40% of rent. */
+  min: number
+  /** 60% of rent. */
+  max: number
+  /** 50% of rent — the prefilled suggestion. */
+  suggested: number
+}
+
+/** The 40–60%-of-rent advance band and the 50% suggestion. Rent ≤ 0 → all 0. */
+export function advancePolicy(rent: number): AdvancePolicy {
+  const r = rent > 0 ? rent : 0
+  return {
+    min: Math.round(r * ADVANCE_MIN_PCT),
+    max: Math.round(r * ADVANCE_MAX_PCT),
+    suggested: Math.round(r * 0.5),
+  }
+}
+
+/**
+ * True when a non-zero advance falls outside the 40–60% band for the rent.
+ * A blank/zero advance (none collected) or a rent ≤ 0 is never out of policy —
+ * the band only applies once an advance is actually being entered.
+ */
+export function advanceOutOfPolicy(advance: number, rent: number): boolean {
+  if (!(advance > 0) || !(rent > 0)) return false
+  const { min, max } = advancePolicy(rent)
+  return advance < min || advance > max
+}
+
 export function defaultDueDate(functionDate: string, leadDays = DEFAULT_ADVANCE_LEAD_DAYS): string {
   return format(subDays(parseISO(functionDate), leadDays), 'yyyy-MM-dd')
 }

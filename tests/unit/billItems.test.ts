@@ -5,6 +5,7 @@ import {
   resolveBillItem,
   billItemBreakdown,
   unitDef,
+  prefillQuantity,
   type FormBillItem,
   type BillItemSnapshot,
 } from '@/lib/utils/billItems'
@@ -257,10 +258,26 @@ describe('billItemBreakdown / unitDef', () => {
   it('formats a per-unit breakdown', () => {
     expect(billItemBreakdown('hour', 3000, 5)).toBe('5 hours × ₹3,000')
   })
+  it('singularises the unit noun at quantity 1', () => {
+    expect(billItemBreakdown('piece', 2500, 1)).toBe('1 unit × ₹2,500')
+    expect(billItemBreakdown('hour', 3000, 1)).toBe('1 hour × ₹3,000')
+  })
   it('is empty for a flat line', () => {
     expect(billItemBreakdown(null, null, null)).toBe('')
   })
   it('falls back gracefully for an unknown unit', () => {
     expect(unitDef('weekend')).toEqual({ value: 'weekend', label: 'Per weekend', short: '/weekend', qty: 'weekend' })
+  })
+})
+
+describe('prefillQuantity', () => {
+  it('returns a configured fixed quantity (the standard charge)', () => {
+    expect(prefillQuantity(1)).toBe(1)
+    expect(prefillQuantity(3)).toBe(3)
+  })
+  it('treats 0 / null / undefined as metered → no prefill', () => {
+    expect(prefillQuantity(0)).toBeNull()
+    expect(prefillQuantity(null)).toBeNull()
+    expect(prefillQuantity(undefined)).toBeNull()
   })
 })
